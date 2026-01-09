@@ -4,6 +4,9 @@ Django>=4.2.0,<5.0.0
 # Database
 psycopg2-binary>=2.9.0  # PostgreSQL adapter for Python
 
+# Image Processing
+Pillow>=10.0.0  # For handling image uploads (recipe photos, user avatars)
+
 # Environment Variables
 python-decouple>=3.8  # For managing .env files
 

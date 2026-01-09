@@ -15,8 +15,31 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from django.shortcuts import redirect
+
+def home_view(request):
+    """Temporary home view - redirects to register if not logged in, profile if logged in"""
+    if request.user.is_authenticated:
+        return redirect('users:profile', username=request.user.username)
+    return redirect('users:register')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # Home page
+    path('', home_view, name='home'),
+    
+    # User authentication and profiles
+    path('users/', include('apps.users.urls')),
+    
+    # API routes
+    path('api/', include('apps.api.urls')),
 ]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

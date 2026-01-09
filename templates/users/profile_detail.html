@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ user_obj.username }}'s Profile - Recipe Sharing Platform{% endblock %}
+
+{% block content %}
+<div class="profile-card">
+    <h1>{{ user_obj.username }}'s Profile</h1>
+    
+    {% if profile.avatar %}
+        <img src="{{ profile.avatar.url }}" alt="{{ user_obj.username }}'s avatar" class="avatar">
+    {% else %}
+        <div style="width: 150px; height: 150px; background-color: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+            No Avatar
+        </div>
+    {% endif %}
+
+    <div style="margin-top: 20px;">
+        <h2>User Information</h2>
+        <p><strong>Username:</strong> {{ user_obj.username }}</p>
+        <p><strong>Email:</strong> {{ user_obj.email }}</p>
+        {% if user_obj.first_name or user_obj.last_name %}
+            <p><strong>Name:</strong> {{ user_obj.first_name }} {{ user_obj.last_name }}</p>
+        {% endif %}
+        <p><strong>Member since:</strong> {{ user_obj.date_joined|date:"F Y" }}</p>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <h2>Profile Information</h2>
+        {% if profile.bio %}
+            <p><strong>Bio:</strong></p>
+            <p>{{ profile.bio }}</p>
+        {% else %}
+            <p><em>No bio yet.</em></p>
+        {% endif %}
+
+        <p><strong>Dietary Preferences:</strong> {{ profile.get_dietary_preferences_display }}</p>
+    </div>
+
+    {% if user == user_obj %}
+        <div style="margin-top: 30px;">
+            <a href="{% url 'users:profile_edit' username=user_obj.username %}" class="btn">Edit Profile</a>
+            <a href="{% url 'users:profile_delete' username=user_obj.username %}" class="btn btn-danger" style="margin-left: 10px;">Delete Account</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+

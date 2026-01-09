@@ -4,9 +4,11 @@ A modern web application for sharing and discovering delicious recipes.
 
 ## 📋 Project Status
 
-**Current Phase:** Phase 1 - Foundation & Setup  
-**Current Milestone:** 1.1 - Development Environment  
-**Milestone Status:** 🟢 90% Complete (Supabase setup pending)
+**Current Phase:** Phase 2 - Data Foundation  
+**Current Milestone:** 2.1 - User System  
+**Milestone 1.1 Status:** 🟢 90% Complete (Supabase setup pending)  
+**Milestone 1.2 Status:** 🟢 95% Complete (Database test pending)  
+**Milestone 2.1 Status:** 🟢 100% Complete (Ready for migration)
 
 **Completion Checklist:** See [Milestone 1.1 Checklist](docs/getting-started/MILESTONE_1.1_CHECKLIST.md)
 
@@ -152,6 +154,8 @@ For detailed documentation, see the [`docs/`](docs/) folder:
 ### Getting Started
 - **[Setup Guide](docs/getting-started/SETUP_GUIDE.md)** - Complete step-by-step setup instructions
 - **[Quick Start](docs/getting-started/QUICK_START.md)** - Fast reference for completing Milestone 1.1
+- **[Essential Setup](docs/getting-started/ESSENTIAL_SETUP.md)** - Essential information to get started
+- **[Environment Variables Guide](docs/getting-started/ENV_VARIABLES_GUIDE.md)** - Complete API keys & credentials guide
 - **[Milestone 1.1 Checklist](docs/getting-started/MILESTONE_1.1_CHECKLIST.md)** - Verification checklist
 - **[Milestone Status](docs/getting-started/MILESTONE_STATUS.md)** - Current progress (90% complete)
 

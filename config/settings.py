@@ -46,6 +46,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_extensions',
+    
+    # Local apps
+    'apps.recipes',
+    'apps.users',
+    'apps.api',
 ]
 
 MIDDLEWARE = [
@@ -85,19 +90,32 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # PostgreSQL Database Configuration (for Supabase)
 # If DB_NAME is not set, fall back to SQLite for local development
-if config('DB_NAME', default=None):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME'),
-            'USER': config('DB_USER', default='postgres'),
-            'PASSWORD': config('DB_PASSWORD'),
-            'HOST': config('DB_HOST'),
-            'PORT': config('DB_PORT', default='5432'),
+try:
+    db_name = config('DB_NAME', default=None)
+    if db_name:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': db_name,
+                'USER': config('DB_USER', default='postgres'),
+                'PASSWORD': config('DB_PASSWORD', default=''),
+                'HOST': config('DB_HOST', default='localhost'),
+                'PORT': config('DB_PORT', default='5432'),
+                'OPTIONS': {
+                    'connect_timeout': 5,  # 5 second timeout
+                },
+            }
         }
-    }
-else:
-    # Fallback to SQLite for local development without database setup
+    else:
+        # Fallback to SQLite for local development without database setup
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+except Exception as e:
+    # If database config fails, use SQLite fallback
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -155,17 +173,26 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Custom User Model
+# Tell Django to use our CustomUser instead of the default User model
+# IMPORTANT: This must be set BEFORE running migrations!
+AUTH_USER_MODEL = 'users.CustomUser'
+
 # CORS Settings (for frontend integration)
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://localhost:8000',
+    default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000',
     cast=Csv()
 )
+CORS_ALLOW_CREDENTIALS = True
 
 # REST Framework Settings
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Change this in production!
+        'rest_framework.permissions.IsAuthenticated',  # Require authentication by default
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20

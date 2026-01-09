@@ -1,0 +1,26 @@
+@echo off
+echo Testing script flow...
+echo.
+echo Step 1: Setting variables...
+set VENV_PYTHON=%~dp0venv\Scripts\python.exe
+set VENV_PIP=%~dp0venv\Scripts\pip.exe
+echo Python: %VENV_PYTHON%
+echo Pip: %VENV_PIP%
+echo.
+echo Step 2: Checking if files exist...
+if exist "%VENV_PYTHON%" (echo ✓ Python found) else (echo ✗ Python NOT found)
+if exist "%VENV_PIP%" (echo ✓ Pip found) else (echo ✗ Pip NOT found)
+if exist .env (echo ✓ .env found) else (echo ✗ .env NOT found)
+if exist env.example (echo ✓ env.example found) else (echo ✗ env.example NOT found)
+if exist manage.py (echo ✓ manage.py found) else (echo ✗ manage.py NOT found)
+echo.
+echo Step 3: Testing if script would continue...
+echo This simulates what should happen after step 2...
+echo.
+echo [3/5] Would check .env file...
+echo [4/5] Would run migrations...
+echo [5/5] Would start server...
+echo.
+echo Test complete!
+pause
+

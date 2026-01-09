@@ -46,6 +46,43 @@ Current status report for Milestone 1.1:
 
 **Use this to:** Quickly see where you are in the milestone.
 
+### [Milestone 1.2 Checklist](MILESTONE_1.2_CHECKLIST.md)
+Verification checklist for Milestone 1.2: Django Project Setup
+- Django project structure
+- Settings configuration
+- Apps structure (recipes, users, api)
+- Dependencies installation
+- Database connection testing
+
+**Use this to:** Track progress on Milestone 1.2.
+
+### [Milestone 1.2 Summary](MILESTONE_1.2_SUMMARY.md)
+Complete summary of Milestone 1.2 accomplishments:
+- What's been completed
+- Project structure overview
+- Ready-to-use features
+- Next steps
+
+**Use this to:** Get a complete overview of Milestone 1.2.
+
+### [Environment Variables Guide](ENV_VARIABLES_GUIDE.md)
+Complete guide to all API keys and environment variables:
+- What each variable is for
+- Where to find them in Supabase
+- Which ones are required vs optional
+- Security best practices
+
+**Use this to:** Understand all the API keys and credentials you need.
+
+### [Essential Setup Guide](ESSENTIAL_SETUP.md)
+Quick reference for essential setup information:
+- Prerequisites checklist
+- Quick start steps
+- Security rules
+- Common issues and solutions
+
+**Use this to:** Get started quickly with all essential information.
+
 ## 🎯 Quick Start Checklist
 
 After reading the setup guide, you should be able to:
