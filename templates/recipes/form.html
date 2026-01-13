@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - Recipe Sharing Platform{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1>{{ title }}</h1>
+
+    <form method="post" enctype="multipart/form-data" class="recipe-form">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="{{ form.title.id_for_label }}">Title *</label>
+            {{ form.title }}
+            {% if form.title.errors %}
+                <div class="error">{{ form.title.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.description.id_for_label }}">Description *</label>
+            {{ form.description }}
+            {% if form.description.errors %}
+                <div class="error">{{ form.description.errors }}</div>
+            {% endif %}
+            <small>{{ form.description.help_text }}</small>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="{{ form.prep_time.id_for_label }}">Prep Time (minutes) *</label>
+                {{ form.prep_time }}
+                {% if form.prep_time.errors %}
+                    <div class="error">{{ form.prep_time.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.cook_time.id_for_label }}">Cook Time (minutes) *</label>
+                {{ form.cook_time }}
+                {% if form.cook_time.errors %}
+                    <div class="error">{{ form.cook_time.errors }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.category.id_for_label }}">Category</label>
+            {{ form.category }}
+            {% if form.category.errors %}
+                <div class="error">{{ form.category.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.image.id_for_label }}">Recipe Image</label>
+            {{ form.image }}
+            {% if form.image.errors %}
+                <div class="error">{{ form.image.errors }}</div>
+            {% endif %}
+            {% if recipe and recipe.image %}
+                <p>Current image: <img src="{{ recipe.image.url }}" alt="Current" style="max-width: 200px; margin-top: 10px;"></p>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.instructions.id_for_label }}">Instructions *</label>
+            {{ form.instructions }}
+            {% if form.instructions.errors %}
+                <div class="error">{{ form.instructions.errors }}</div>
+            {% endif %}
+            <small>Enter step-by-step cooking instructions</small>
+        </div>
+
+        <div class="form-group">
+            <label>Ingredients</label>
+            <div id="ingredients-container">
+                {% if existing_ingredients %}
+                    {% for ri in existing_ingredients %}
+                        <div class="ingredient-row">
+                            <input type="text" class="ingredient-name" placeholder="Ingredient name" value="{{ ri.ingredient.name }}" required>
+                            <input type="number" class="ingredient-quantity" placeholder="Quantity" value="{{ ri.quantity }}" step="0.01" min="0" required>
+                            <input type="text" class="ingredient-unit" placeholder="Unit (e.g., cups, tbsp)" value="{{ ri.unit }}">
+                            <input type="text" class="ingredient-notes" placeholder="Notes (optional)" value="{{ ri.notes }}">
+                            <button type="button" class="btn-remove-ingredient">Remove</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            <button type="button" id="add-ingredient" class="btn" style="margin-top: 10px;">Add Ingredient</button>
+            <input type="hidden" name="ingredients_data" id="ingredients-data">
+        </div>
+
+        <div class="form-group">
+            <label>
+                {{ form.is_published }}
+                Published (visible to others)
+            </label>
+            {% if form.is_published.errors %}
+                <div class="error">{{ form.is_published.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn">Save Recipe</button>
+            {% if recipe %}
+                <a href="{% url 'recipes:detail' recipe.pk %}" class="btn" style="background: #95a5a6;">Cancel</a>
+            {% else %}
+                <a href="{% url 'recipes:list' %}" class="btn" style="background: #95a5a6;">Cancel</a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if recipe %}
+        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <h3>Manage Ingredients</h3>
+            <p>Ingredients can be managed after saving the recipe.</p>
+            <a href="{% url 'recipes:detail' recipe.pk %}" class="btn">View Recipe</a>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+.recipe-form {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-size: 0.9em;
+}
+.error {
+    color: #e74c3c;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+}
+.ingredient-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr auto;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+.ingredient-row input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.btn-remove-ingredient {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.btn-remove-ingredient:hover {
+    background: #c0392b;
+}
+#ingredients-container {
+    margin-bottom: 10px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('ingredients-container');
+    const addBtn = document.getElementById('add-ingredient');
+    const dataInput = document.getElementById('ingredients-data');
+    
+    function updateIngredientsData() {
+        const rows = container.querySelectorAll('.ingredient-row');
+        const data = [];
+        rows.forEach(row => {
+            const name = row.querySelector('.ingredient-name').value.trim();
+            const quantity = parseFloat(row.querySelector('.ingredient-quantity').value) || 0;
+            const unit = row.querySelector('.ingredient-unit').value.trim();
+            const notes = row.querySelector('.ingredient-notes').value.trim();
+            if (name && quantity > 0) {
+                data.push({ name, quantity, unit, notes });
+            }
+        });
+        dataInput.value = JSON.stringify(data);
+    }
+    
+    function addIngredientRow(name = '', quantity = '', unit = '', notes = '') {
+        const row = document.createElement('div');
+        row.className = 'ingredient-row';
+        row.innerHTML = `
+            <input type="text" class="ingredient-name" placeholder="Ingredient name" value="${name}" required>
+            <input type="number" class="ingredient-quantity" placeholder="Quantity" value="${quantity}" step="0.01" min="0" required>
+            <input type="text" class="ingredient-unit" placeholder="Unit (e.g., cups, tbsp)" value="${unit}">
+            <input type="text" class="ingredient-notes" placeholder="Notes (optional)" value="${notes}">
+            <button type="button" class="btn-remove-ingredient">Remove</button>
+        `;
+        container.appendChild(row);
+        
+        row.querySelector('.btn-remove-ingredient').addEventListener('click', function() {
+            row.remove();
+            updateIngredientsData();
+        });
+        
+        row.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', updateIngredientsData);
+        });
+    }
+    
+    addBtn.addEventListener('click', function() {
+        addIngredientRow();
+    });
+    
+    // Initialize data from existing ingredients
+    updateIngredientsData();
+    
+    // Update data before form submission
+    document.querySelector('.recipe-form').addEventListener('submit', function(e) {
+        updateIngredientsData();
+    });
+});
+</script>
+{% endblock %}
+

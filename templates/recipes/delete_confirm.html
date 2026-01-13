@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Recipe - Recipe Sharing Platform{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="profile-card" style="border: 2px solid #e74c3c;">
+        <h1 style="color: #e74c3c;">Delete Recipe</h1>
+        
+        <p><strong>Warning:</strong> This action cannot be undone!</p>
+        <p>Are you sure you want to delete the recipe "<strong>{{ recipe.title }}</strong>"?</p>
+        
+        <p style="margin-top: 20px;">This will permanently delete:</p>
+        <ul style="margin-left: 20px; margin-top: 10px;">
+            <li>The recipe</li>
+            <li>All associated ingredients</li>
+            <li>The recipe image</li>
+        </ul>
+
+        <form method="post" style="margin-top: 30px;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Yes, Delete Recipe</button>
+            <a href="{% url 'recipes:detail' recipe.pk %}" class="btn" style="margin-left: 10px;">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

@@ -122,7 +122,9 @@
                     <a href="{% url 'home' %}">Recipe Sharing Platform</a>
                 </div>
                 <div>
+                    <a href="{% url 'recipes:list' %}">Recipes</a>
                     {% if user.is_authenticated %}
+                        <a href="{% url 'recipes:create' %}">Create Recipe</a>
                         <a href="{% url 'users:profile' username=user.username %}">My Profile</a>
                         <form method="post" action="{% url 'users:logout' %}" style="display: inline; margin: 0;">
                             {% csrf_token %}

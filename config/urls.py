@@ -21,10 +21,8 @@ from django.conf.urls.static import static
 from django.shortcuts import redirect
 
 def home_view(request):
-    """Temporary home view - redirects to register if not logged in, profile if logged in"""
-    if request.user.is_authenticated:
-        return redirect('users:profile', username=request.user.username)
-    return redirect('users:register')
+    """Home view - redirects to recipes list"""
+    return redirect('recipes:list')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -34,6 +32,9 @@ urlpatterns = [
     
     # User authentication and profiles
     path('users/', include('apps.users.urls')),
+    
+    # Recipes
+    path('recipes/', include('apps.recipes.urls')),
     
     # API routes
     path('api/', include('apps.api.urls')),

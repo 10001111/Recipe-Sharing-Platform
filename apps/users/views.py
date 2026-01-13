@@ -73,12 +73,17 @@ def login_view(request):
     What does this do?
     1. If user submits login form → Check credentials
     2. If credentials are correct → Log them in
-    3. If wrong → Show error message
+    3. If wrong → Return error flag for pop-up
     """
     if request.method == 'POST':
         # Get username and password from form
         username = request.POST.get('username')
         password = request.POST.get('password')
+        
+        # Check if user exists
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user_exists = User.objects.filter(username=username).exists()
         
         # Authenticate the user (check if credentials are correct)
         user = authenticate(request, username=username, password=password)
@@ -92,8 +97,12 @@ def login_view(request):
             next_url = request.GET.get('next', 'users:profile')
             return redirect(next_url, username=username)
         else:
-            # Credentials are wrong - show error
-            messages.error(request, 'Invalid username or password.')
+            # Credentials are wrong - return with error flag
+            error_message = "User isn't registered." if not user_exists else "Invalid password."
+            return render(request, 'users/login.html', {
+                'login_error': error_message,
+                'username': username
+            })
     
     # Render login template
     return render(request, 'users/login.html')

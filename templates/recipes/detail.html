@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ recipe.title }} - Recipe Sharing Platform{% endblock %}
+
+{% block content %}
+<div class="recipe-detail">
+    <div class="recipe-header">
+        <h1>{{ recipe.title }}</h1>
+        {% if can_edit %}
+            <div class="recipe-actions">
+                <a href="{% url 'recipes:edit' recipe.pk %}" class="btn">Edit</a>
+                <a href="{% url 'recipes:delete' recipe.pk %}" class="btn btn-danger">Delete</a>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="recipe-meta-info">
+        <p>
+            by <a href="{% url 'users:profile' recipe.author.username %}">{{ recipe.author.username }}</a>
+            {% if recipe.category %}
+                | Category: <a href="{% url 'recipes:category_detail' recipe.category.slug %}">{{ recipe.category.name }}</a>
+            {% endif %}
+            | Created: {{ recipe.created_at|date:"F d, Y" }}
+        </p>
+    </div>
+
+    {% if recipe.image %}
+        <img src="{{ recipe.image.url }}" alt="{{ recipe.title }}" class="recipe-main-image">
+    {% endif %}
+
+    <div class="recipe-info-grid">
+        <div class="recipe-info-card">
+            <h3>⏱ Prep Time</h3>
+            <p>{{ recipe.prep_time }} minutes</p>
+        </div>
+        <div class="recipe-info-card">
+            <h3>🔥 Cook Time</h3>
+            <p>{{ recipe.cook_time }} minutes</p>
+        </div>
+        <div class="recipe-info-card">
+            <h3>⏰ Total Time</h3>
+            <p>{{ recipe.total_time }} minutes</p>
+        </div>
+    </div>
+
+    <div class="recipe-section">
+        <h2>Description</h2>
+        <p>{{ recipe.description|linebreaks }}</p>
+    </div>
+
+    <div class="recipe-section">
+        <h2>Ingredients</h2>
+        <ul class="ingredients-list">
+            {% for recipe_ingredient in recipe.recipe_ingredients.all %}
+                <li>
+                    {% if recipe_ingredient.quantity %}
+                        <strong>{{ recipe_ingredient.quantity }}</strong>
+                        {% if recipe_ingredient.unit %}{{ recipe_ingredient.unit }}{% endif %}
+                    {% endif %}
+                    {{ recipe_ingredient.ingredient.name }}
+                    {% if recipe_ingredient.notes %}
+                        <em>({{ recipe_ingredient.notes }})</em>
+                    {% endif %}
+                </li>
+            {% empty %}
+                <li>No ingredients listed.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="recipe-section">
+        <h2>Instructions</h2>
+        <div class="instructions">
+            {{ recipe.instructions|linebreaks }}
+        </div>
+    </div>
+
+    <div class="recipe-footer">
+        <a href="{% url 'recipes:list' %}" class="btn">Back to Recipes</a>
+    </div>
+</div>
+
+<style>
+.recipe-detail {
+    max-width: 900px;
+    margin: 0 auto;
+}
+.recipe-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.recipe-actions {
+    display: flex;
+    gap: 10px;
+}
+.recipe-meta-info {
+    color: #666;
+    margin-bottom: 20px;
+}
+.recipe-main-image {
+    width: 100%;
+    max-height: 500px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 30px;
+}
+.recipe-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 30px;
+}
+.recipe-info-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+.recipe-info-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    color: #666;
+}
+.recipe-info-card p {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #2c3e50;
+}
+.recipe-section {
+    margin-bottom: 30px;
+}
+.recipe-section h2 {
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+.ingredients-list {
+    list-style: none;
+    padding: 0;
+}
+.ingredients-list li {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+.ingredients-list li:last-child {
+    border-bottom: none;
+}
+.instructions {
+    white-space: pre-line;
+    line-height: 1.8;
+}
+.recipe-footer {
+    margin-top: 40px;
+    text-align: center;
+}
+</style>
+{% endblock %}
+
