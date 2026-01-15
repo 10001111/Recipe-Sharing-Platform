@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { recipeApi, ratingApi, commentApi, favoriteApi, Recipe, Rating, Comment } from '@/lib/api';
+import Link from 'next/link';
+import { recipeApi, ratingApi, commentApi, favoriteApi, userApi, Recipe, Rating, Comment } from '@/lib/api';
 import RatingStars from '@/components/RatingStars';
 import CommentForm from '@/components/CommentForm';
 import CommentList from '@/components/CommentList';
@@ -18,14 +19,38 @@ export default function RecipeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isFavorited, setIsFavorited] = useState(false);
   const [userRating, setUserRating] = useState<Rating | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAuthor, setIsAuthor] = useState(false);
 
   useEffect(() => {
     if (recipeId) {
-      loadRecipe();
-      loadRatings();
-      loadComments();
+      Promise.all([
+        checkCurrentUser(),
+        loadRecipe(),
+        loadRatings(),
+        loadComments()
+      ]);
     }
   }, [recipeId]);
+
+  useEffect(() => {
+    // Update isAuthor when currentUser or recipe changes
+    if (currentUser && recipe) {
+      setIsAuthor(currentUser.id === recipe.author.id);
+    } else {
+      setIsAuthor(false);
+    }
+  }, [currentUser, recipe]);
+
+  const checkCurrentUser = async () => {
+    try {
+      const user = await userApi.getCurrent();
+      setCurrentUser(user);
+    } catch (error) {
+      // User not logged in
+      setCurrentUser(null);
+    }
+  };
 
   const loadRecipe = async () => {
     try {
@@ -34,6 +59,12 @@ export default function RecipeDetailPage() {
       setIsFavorited(data.is_favorited || false);
       if (data.user_rating) {
         setUserRating(data.user_rating as any);
+      }
+      // Check if current user is the author (check after recipe loads)
+      if (currentUser && data.author.id === currentUser.id) {
+        setIsAuthor(true);
+      } else {
+        setIsAuthor(false);
       }
       // Increment view count
       await recipeApi.incrementView(recipeId);
@@ -215,7 +246,7 @@ export default function RecipeDetailPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
                 <div className="recipe-card-rating">
                   <span className="star">⭐</span>
                   <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
@@ -225,13 +256,19 @@ export default function RecipeDetailPage() {
                     ({recipe.rating_count} ratings)
                   </span>
                 </div>
-                <button 
-                  onClick={handleToggleFavorite}
-                  className={isFavorited ? 'btn-primary' : 'btn-outline'}
-                  style={{ marginLeft: 'auto' }}
-                >
-                  {isFavorited ? '❤️ Favorited' : '🤍 Favorite'}
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                  {isAuthor && (
+                    <Link href={`/recipes/${recipeId}/edit`} className="btn-outline">
+                      ✏️ Edit Recipe
+                    </Link>
+                  )}
+                  <button 
+                    onClick={handleToggleFavorite}
+                    className={isFavorited ? 'btn-primary' : 'btn-outline'}
+                  >
+                    {isFavorited ? '❤️ Favorited' : '🤍 Favorite'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

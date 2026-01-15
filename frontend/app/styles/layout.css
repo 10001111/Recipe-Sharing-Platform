@@ -1,0 +1,139 @@
+/**
+ * Layout Styles
+ * Layout-specific styles for the Recipe Sharing Platform
+ */
+
+/* Main Layout */
+main {
+  flex: 1;
+  min-height: calc(100vh - 200px);
+}
+
+.main-content {
+  flex: 1;
+  min-height: calc(100vh - 200px);
+}
+
+/* Navbar */
+.navbar {
+  background-color: var(--card-bg);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-md) 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.navbar-brand {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--primary-color);
+}
+
+.navbar-links {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+.navbar-links a {
+  color: var(--text-color);
+  transition: color var(--transition-base);
+}
+
+.navbar-links a:hover {
+  color: var(--primary-color);
+}
+
+.navbar-username {
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+/* Footer */
+.footer {
+  background-color: var(--card-bg);
+  border-top: 1px solid var(--border-color);
+  margin-top: 4rem;
+  padding: 3rem 0 1.5rem;
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-xl);
+}
+
+.footer-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
+}
+
+.footer-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 0.75rem;
+}
+
+.footer-description {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.footer-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: var(--spacing-md);
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: var(--spacing-sm);
+}
+
+.footer-links a {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  transition: color var(--transition-base);
+}
+
+.footer-links a:hover {
+  color: var(--primary-color);
+}
+
+.footer-bottom {
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--spacing-lg);
+  text-align: center;
+}
+
+.footer-copyright {
+  color: var(--text-light);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
