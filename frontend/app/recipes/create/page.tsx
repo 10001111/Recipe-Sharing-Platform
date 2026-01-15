@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { recipeApi } from '@/lib/api';
+import ImageUpload from '@/components/ImageUpload';
+import IngredientForm, { Ingredient } from '@/components/IngredientForm';
 
 export default function CreateRecipePage() {
   const router = useRouter();
@@ -16,6 +18,7 @@ export default function CreateRecipePage() {
     is_published: true,
   });
   const [image, setImage] = useState<File | null>(null);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -142,15 +145,15 @@ export default function CreateRecipePage() {
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Recipe Image</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImage(e.target.files?.[0] || null)}
-              className="form-input"
-            />
-          </div>
+          <ImageUpload 
+            onImageChange={setImage}
+            label="Recipe Image"
+          />
+
+          <IngredientForm 
+            ingredients={ingredients}
+            onChange={setIngredients}
+          />
 
           <div className="form-group">
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

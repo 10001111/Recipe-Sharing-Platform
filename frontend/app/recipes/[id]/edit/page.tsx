@@ -21,6 +21,7 @@ export default function EditRecipePage() {
   });
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -48,6 +49,18 @@ export default function EditRecipePage() {
       if (data.image) {
         setImagePreview(data.image.startsWith('http') ? data.image : `http://127.0.0.1:8000${data.image}`);
       }
+      
+      // Load ingredients if available
+      if (data.ingredients && Array.isArray(data.ingredients)) {
+        const loadedIngredients: Ingredient[] = data.ingredients.map((ing: any) => ({
+          id: ing.id,
+          name: ing.name || '',
+          quantity: ing.quantity?.toString() || '',
+          unit: ing.unit || '',
+          notes: ing.notes || '',
+        }));
+        setIngredients(loadedIngredients);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load recipe');
       console.error('Error loading recipe:', err);
@@ -56,15 +69,16 @@ export default function EditRecipePage() {
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImageChange = (file: File | null) => {
+    setImage(file);
     if (file) {
-      setImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    } else {
+      setImagePreview(recipe?.image ? (recipe.image.startsWith('http') ? recipe.image : `http://127.0.0.1:8000${recipe.image}`) : null);
     }
   };
 
@@ -214,32 +228,16 @@ export default function EditRecipePage() {
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Recipe Image</label>
-            {imagePreview && (
-              <div style={{ marginBottom: '1rem' }}>
-                <img 
-                  src={imagePreview} 
-                  alt="Preview" 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '300px', 
-                    borderRadius: '8px',
-                    objectFit: 'cover'
-                  }} 
-                />
-              </div>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="form-input"
-            />
-            <small style={{ color: '#666', display: 'block', marginTop: '0.5rem' }}>
-              Leave empty to keep current image
-            </small>
-          </div>
+          <ImageUpload 
+            onImageChange={handleImageChange}
+            currentImage={recipe.image ? (recipe.image.startsWith('http') ? recipe.image : `http://127.0.0.1:8000${recipe.image}`) : null}
+            label="Recipe Image"
+          />
+
+          <IngredientForm 
+            ingredients={ingredients}
+            onChange={setIngredients}
+          />
 
           <div className="form-group">
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

@@ -7,6 +7,7 @@ import { recipeApi, ratingApi, commentApi, favoriteApi, userApi, Recipe, Rating,
 import RatingStars from '@/components/RatingStars';
 import CommentForm from '@/components/CommentForm';
 import CommentList from '@/components/CommentList';
+import FavoriteButton from '@/components/FavoriteButton';
 
 export default function RecipeDetailPage() {
   const params = useParams();
@@ -131,19 +132,6 @@ export default function RecipeDetailPage() {
     }
   };
 
-  const handleToggleFavorite = async () => {
-    try {
-      const response = await favoriteApi.toggle(recipeId);
-      setIsFavorited(response.is_favorited);
-      if (recipe) {
-        setRecipe({ ...recipe, favorite_count: response.favorite_count });
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-      alert('Please login to favorite recipes.');
-      router.push('/login');
-    }
-  };
 
   const handleCommentSubmit = async (text: string) => {
     try {
@@ -262,12 +250,17 @@ export default function RecipeDetailPage() {
                       ✏️ Edit Recipe
                     </Link>
                   )}
-                  <button 
-                    onClick={handleToggleFavorite}
-                    className={isFavorited ? 'btn-primary' : 'btn-outline'}
-                  >
-                    {isFavorited ? '❤️ Favorited' : '🤍 Favorite'}
-                  </button>
+                <FavoriteButton
+                  recipeId={recipeId}
+                  initialFavorited={isFavorited}
+                  initialCount={recipe.favorite_count}
+                  onToggle={(favorited, count) => {
+                    setIsFavorited(favorited);
+                    if (recipe) {
+                      setRecipe({ ...recipe, favorite_count: count });
+                    }
+                  }}
+                />
                 </div>
               </div>
             </div>
