@@ -1,0 +1,409 @@
+[
+  {
+    "model": "users.customuser",
+    "pk": 1,
+    "fields": {
+      "username": "chef_john",
+      "email": "john@example.com",
+      "first_name": "John",
+      "last_name": "Smith",
+      "is_active": true,
+      "is_staff": false,
+      "is_superuser": false,
+      "date_joined": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "users.customuser",
+    "pk": 2,
+    "fields": {
+      "username": "baking_betty",
+      "email": "betty@example.com",
+      "first_name": "Betty",
+      "last_name": "Baker",
+      "is_active": true,
+      "is_staff": false,
+      "is_superuser": false,
+      "date_joined": "2024-01-16T10:00:00Z"
+    }
+  },
+  {
+    "model": "users.customuser",
+    "pk": 3,
+    "fields": {
+      "username": "vegan_victor",
+      "email": "victor@example.com",
+      "first_name": "Victor",
+      "last_name": "Vegan",
+      "is_active": true,
+      "is_staff": false,
+      "is_superuser": false,
+      "date_joined": "2024-01-17T10:00:00Z"
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 1,
+    "fields": {
+      "user": 1,
+      "bio": "Professional chef with 10 years of experience. Love sharing my favorite recipes!",
+      "dietary_preferences": "none",
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 2,
+    "fields": {
+      "user": 2,
+      "bio": "Passionate baker specializing in desserts and pastries.",
+      "dietary_preferences": "none",
+      "created_at": "2024-01-16T10:00:00Z",
+      "updated_at": "2024-01-16T10:00:00Z"
+    }
+  },
+  {
+    "model": "users.userprofile",
+    "pk": 3,
+    "fields": {
+      "user": 3,
+      "bio": "Plant-based cooking enthusiast. All my recipes are vegan-friendly!",
+      "dietary_preferences": "vegan",
+      "created_at": "2024-01-17T10:00:00Z",
+      "updated_at": "2024-01-17T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.category",
+    "pk": 1,
+    "fields": {
+      "name": "Breakfast",
+      "slug": "breakfast",
+      "description": "Start your day right with these delicious breakfast recipes",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.category",
+    "pk": 2,
+    "fields": {
+      "name": "Lunch",
+      "slug": "lunch",
+      "description": "Satisfying lunch recipes for midday meals",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.category",
+    "pk": 3,
+    "fields": {
+      "name": "Dinner",
+      "slug": "dinner",
+      "description": "Hearty dinner recipes for the whole family",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.category",
+    "pk": 4,
+    "fields": {
+      "name": "Dessert",
+      "slug": "dessert",
+      "description": "Sweet treats and desserts",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.category",
+    "pk": 5,
+    "fields": {
+      "name": "Snack",
+      "slug": "snack",
+      "description": "Quick and easy snacks",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 1,
+    "fields": {
+      "name": "All-purpose flour"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 2,
+    "fields": {
+      "name": "Sugar"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 3,
+    "fields": {
+      "name": "Eggs"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 4,
+    "fields": {
+      "name": "Butter"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 5,
+    "fields": {
+      "name": "Milk"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 6,
+    "fields": {
+      "name": "Chicken breast"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 7,
+    "fields": {
+      "name": "Olive oil"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 8,
+    "fields": {
+      "name": "Salt"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 9,
+    "fields": {
+      "name": "Black pepper"
+    }
+  },
+  {
+    "model": "recipes.ingredient",
+    "pk": 10,
+    "fields": {
+      "name": "Garlic"
+    }
+  },
+  {
+    "model": "recipes.recipe",
+    "pk": 1,
+    "fields": {
+      "title": "Classic Chocolate Chip Cookies",
+      "description": "The perfect chocolate chip cookie recipe - crispy edges, chewy center, and loaded with chocolate chips.",
+      "instructions": "1. Preheat oven to 375°F (190°C).\n2. Mix flour, baking soda, and salt in a bowl.\n3. Beat butter, sugar, and brown sugar until creamy.\n4. Add eggs and vanilla, mix well.\n5. Gradually blend in flour mixture.\n6. Stir in chocolate chips.\n7. Drop rounded tablespoons onto ungreased baking sheets.\n8. Bake for 9-11 minutes until golden brown.\n9. Cool on baking sheet for 2 minutes, then transfer to wire rack.",
+      "prep_time": 15,
+      "cook_time": 11,
+      "author": 2,
+      "category": 4,
+      "view_count": 125,
+      "is_published": true,
+      "created_at": "2024-01-16T10:00:00Z",
+      "updated_at": "2024-01-16T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.recipe",
+    "pk": 2,
+    "fields": {
+      "title": "Grilled Chicken Breast",
+      "description": "Perfectly grilled chicken breast - juicy, flavorful, and easy to make.",
+      "instructions": "1. Preheat grill to medium-high heat.\n2. Season chicken breasts with salt, pepper, and garlic.\n3. Brush with olive oil.\n4. Grill for 6-7 minutes per side.\n5. Check internal temperature reaches 165°F (74°C).\n6. Let rest for 5 minutes before slicing.",
+      "prep_time": 10,
+      "cook_time": 15,
+      "author": 1,
+      "category": 3,
+      "view_count": 89,
+      "is_published": true,
+      "created_at": "2024-01-17T10:00:00Z",
+      "updated_at": "2024-01-17T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.recipe",
+    "pk": 3,
+    "fields": {
+      "title": "Vegan Avocado Toast",
+      "description": "Simple, healthy, and delicious vegan avocado toast perfect for breakfast.",
+      "instructions": "1. Toast bread slices until golden.\n2. Mash avocado with lemon juice, salt, and pepper.\n3. Spread avocado mixture on toast.\n4. Top with cherry tomatoes and microgreens.\n5. Drizzle with olive oil and serve immediately.",
+      "prep_time": 5,
+      "cook_time": 3,
+      "author": 3,
+      "category": 1,
+      "view_count": 67,
+      "is_published": true,
+      "created_at": "2024-01-18T10:00:00Z",
+      "updated_at": "2024-01-18T10:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.recipeingredient",
+    "pk": 1,
+    "fields": {
+      "recipe": 1,
+      "ingredient": 1,
+      "quantity": "2.25",
+      "unit": "cups",
+      "notes": ""
+    }
+  },
+  {
+    "model": "recipes.recipeingredient",
+    "pk": 2,
+    "fields": {
+      "recipe": 1,
+      "ingredient": 2,
+      "quantity": "0.75",
+      "unit": "cup",
+      "notes": ""
+    }
+  },
+  {
+    "model": "recipes.recipeingredient",
+    "pk": 3,
+    "fields": {
+      "recipe": 1,
+      "ingredient": 3,
+      "quantity": "2",
+      "unit": "large",
+      "notes": ""
+    }
+  },
+  {
+    "model": "recipes.recipeingredient",
+    "pk": 4,
+    "fields": {
+      "recipe": 2,
+      "ingredient": 6,
+      "quantity": "4",
+      "unit": "pieces",
+      "notes": "boneless, skinless"
+    }
+  },
+  {
+    "model": "recipes.recipeingredient",
+    "pk": 5,
+    "fields": {
+      "recipe": 2,
+      "ingredient": 7,
+      "quantity": "2",
+      "unit": "tablespoons",
+      "notes": ""
+    }
+  },
+  {
+    "model": "recipes.rating",
+    "pk": 1,
+    "fields": {
+      "recipe": 1,
+      "user": 1,
+      "stars": 5,
+      "review_text": "Absolutely delicious! The best chocolate chip cookies I've ever made.",
+      "created_at": "2024-01-16T12:00:00Z",
+      "updated_at": "2024-01-16T12:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.rating",
+    "pk": 2,
+    "fields": {
+      "recipe": 1,
+      "user": 3,
+      "stars": 4,
+      "review_text": "Great recipe! Made them vegan by substituting eggs with flax eggs.",
+      "created_at": "2024-01-16T14:00:00Z",
+      "updated_at": "2024-01-16T14:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.rating",
+    "pk": 3,
+    "fields": {
+      "recipe": 2,
+      "user": 2,
+      "stars": 5,
+      "review_text": "Perfectly cooked and very flavorful. Will make again!",
+      "created_at": "2024-01-17T15:00:00Z",
+      "updated_at": "2024-01-17T15:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.comment",
+    "pk": 1,
+    "fields": {
+      "recipe": 1,
+      "user": 1,
+      "text": "Can I use dark chocolate chips instead?",
+      "created_at": "2024-01-16T13:00:00Z",
+      "updated_at": "2024-01-16T13:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.comment",
+    "pk": 2,
+    "fields": {
+      "recipe": 1,
+      "user": 2,
+      "text": "Yes! Dark chocolate works great. I've tried it and it's amazing.",
+      "created_at": "2024-01-16T13:30:00Z",
+      "updated_at": "2024-01-16T13:30:00Z"
+    }
+  },
+  {
+    "model": "recipes.comment",
+    "pk": 3,
+    "fields": {
+      "recipe": 2,
+      "user": 3,
+      "text": "How long should I marinate the chicken?",
+      "created_at": "2024-01-17T16:00:00Z",
+      "updated_at": "2024-01-17T16:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.favorite",
+    "pk": 1,
+    "fields": {
+      "recipe": 1,
+      "user": 1,
+      "created_at": "2024-01-16T11:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.favorite",
+    "pk": 2,
+    "fields": {
+      "recipe": 1,
+      "user": 3,
+      "created_at": "2024-01-16T14:00:00Z"
+    }
+  },
+  {
+    "model": "recipes.favorite",
+    "pk": 3,
+    "fields": {
+      "recipe": 2,
+      "user": 2,
+      "created_at": "2024-01-17T15:30:00Z"
+    }
+  },
+  {
+    "model": "recipes.favorite",
+    "pk": 4,
+    "fields": {
+      "recipe": 3,
+      "user": 1,
+      "created_at": "2024-01-18T11:00:00Z"
+    }
+  }
+]
+

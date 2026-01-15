@@ -98,19 +98,42 @@ WSGI_APPLICATION = 'config.wsgi.application'
 try:
     db_name = config('DB_NAME', default=None)
     if db_name:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': db_name,
-                'USER': config('DB_USER', default='postgres'),
-                'PASSWORD': config('DB_PASSWORD', default=''),
-                'HOST': config('DB_HOST', default='localhost'),
-                'PORT': config('DB_PORT', default='5432'),
-                'OPTIONS': {
-                    'connect_timeout': 5,  # 5 second timeout
-                },
+        db_host = config('DB_HOST', default='localhost')
+        # Check if DB_HOST contains a full connection URL (common mistake)
+        # If it does, extract just the hostname
+        if db_host.startswith('postgresql://') or db_host.startswith('postgres://'):
+            # Extract hostname from connection string
+            # Format: postgresql://user:pass@host:port/dbname
+            import re
+            match = re.search(r'@([^:/]+)', db_host)
+            if match:
+                db_host = match.group(1)
+            else:
+                # If parsing fails, use SQLite
+                db_name = None
+        
+        if db_name:
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': db_name,
+                    'USER': config('DB_USER', default='postgres'),
+                    'PASSWORD': config('DB_PASSWORD', default=''),
+                    'HOST': db_host,
+                    'PORT': config('DB_PORT', default='5432'),
+                    'OPTIONS': {
+                        'connect_timeout': 5,  # 5 second timeout
+                    },
+                }
             }
-        }
+        else:
+            # Fallback to SQLite if DB_NAME is None or invalid
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': BASE_DIR / 'db.sqlite3',
+                }
+            }
     else:
         # Fallback to SQLite for local development without database setup
         DATABASES = {
@@ -121,6 +144,8 @@ try:
         }
 except Exception as e:
     # If database config fails, use SQLite fallback
+    import warnings
+    warnings.warn(f'Database configuration error: {e}. Falling back to SQLite.')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',

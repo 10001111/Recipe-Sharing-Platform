@@ -14,9 +14,22 @@ What does this do?
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
+from django.db.models import Count
 from .models import UserProfile
 
 User = get_user_model()
+
+
+class RecipeInline(admin.TabularInline):
+    """Inline editing for user's recipes"""
+    from apps.recipes.models import Recipe
+    model = Recipe
+    extra = 0
+    fields = ['title', 'category', 'is_published', 'view_count', 'created_at']
+    readonly_fields = ['created_at']
+    can_delete = False
+    show_change_link = True
+    fk_name = 'author'  # Specify the ForeignKey field name
 
 
 @admin.register(User)
@@ -55,6 +68,9 @@ class CustomUserAdmin(BaseUserAdmin):
             'fields': ('username', 'email', 'password1', 'password2'),
         }),
     )
+    
+    # Inline editing for user's recipes
+    inlines = [RecipeInline]
 
 
 @admin.register(UserProfile)
@@ -63,7 +79,7 @@ class UserProfileAdmin(admin.ModelAdmin):
     Admin interface for UserProfile model
     """
     # Fields to show in the profile list
-    list_display = ('user', 'dietary_preferences', 'created_at', 'updated_at')
+    list_display = ('user', 'dietary_preferences', 'recipe_count', 'created_at', 'updated_at')
     
     # Fields to filter by
     list_filter = ('dietary_preferences', 'created_at')
@@ -87,3 +103,16 @@ class UserProfileAdmin(admin.ModelAdmin):
     
     # Read-only fields (can't be edited)
     readonly_fields = ('created_at', 'updated_at')
+    
+    def get_queryset(self, request):
+        """Optimize queryset with recipe count"""
+        qs = super().get_queryset(request)
+        return qs.select_related('user').annotate(
+            recipe_count=Count('user__recipes')
+        )
+    
+    def recipe_count(self, obj):
+        """Display recipe count for user"""
+        return obj.recipe_count
+    recipe_count.short_description = 'Recipes'
+    recipe_count.admin_order_field = 'recipe_count'
