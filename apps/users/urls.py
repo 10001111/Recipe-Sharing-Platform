@@ -25,6 +25,7 @@ urlpatterns = [
     path('register/', views.register_view, name='register'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('supabase-auth/', views.supabase_auth_callback, name='supabase_auth'),
     
     # Profile URLs
     # <username> is a URL parameter - it captures the username from the URL

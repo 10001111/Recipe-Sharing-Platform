@@ -10,8 +10,10 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.views.generic import ListView, DetailView
-from .models import Recipe, Category, Ingredient, RecipeIngredient
-from .forms import RecipeForm, RecipeIngredientForm
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from .models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite
+from .forms import RecipeForm, RecipeIngredientForm, RatingForm, CommentForm
 
 
 class RecipeListView(ListView):
@@ -56,8 +58,19 @@ class RecipeDetailView(DetailView):
     
     def get_queryset(self):
         return Recipe.objects.select_related('author', 'category').prefetch_related(
-            'recipe_ingredients__ingredient'
+            'recipe_ingredients__ingredient',
+            'ratings__user',
+            'comments__user',
+            'favorites__user'
         )
+    
+    def get_object(self, queryset=None):
+        """Get recipe and increment view count"""
+        recipe = super().get_object(queryset)
+        # Increment view count (only for published recipes)
+        if recipe.is_published:
+            recipe.increment_view_count()
+        return recipe
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -68,6 +81,25 @@ class RecipeDetailView(DetailView):
             self.request.user.is_authenticated and
             (recipe.author == self.request.user or self.request.user.is_staff)
         )
+        
+        # Check if user has favorited this recipe
+        context['is_favorited'] = False
+        if self.request.user.is_authenticated:
+            context['is_favorited'] = recipe.favorites.filter(user=self.request.user).exists()
+        
+        # Check if user has rated this recipe
+        context['user_rating'] = None
+        if self.request.user.is_authenticated:
+            try:
+                context['user_rating'] = recipe.ratings.get(user=self.request.user)
+            except:
+                pass
+        
+        # Get recent comments
+        context['comments'] = recipe.comments.select_related('user').all()[:10]
+        
+        # Get ratings summary
+        context['ratings'] = recipe.ratings.select_related('user').all()[:10]
         
         return context
 
@@ -212,5 +244,149 @@ def category_detail_view(request, slug):
     return render(request, 'recipes/category.html', {
         'category': category,
         'recipes': page_obj,
+        'categories': Category.objects.all()
+    })
+
+
+# ========== SOCIAL FEATURES VIEWS ==========
+
+@login_required
+@require_POST
+def rate_recipe_view(request, pk):
+    """Rate or update rating for a recipe"""
+    recipe = get_object_or_404(Recipe, pk=pk, is_published=True)
+    
+    # Get or create rating
+    rating, created = Rating.objects.get_or_create(
+        recipe=recipe,
+        user=request.user,
+        defaults={'stars': 0}
+    )
+    
+    # Update rating
+    stars = int(request.POST.get('stars', 0))
+    review_text = request.POST.get('review_text', '').strip()
+    
+    if stars < 1 or stars > 5:
+        messages.error(request, 'Rating must be between 1 and 5 stars.')
+        return redirect('recipes:detail', pk=recipe.pk)
+    
+    rating.stars = stars
+    rating.review_text = review_text[:1000]  # Enforce max length
+    rating.save()
+    
+    if created:
+        messages.success(request, 'Thank you for rating this recipe!')
+    else:
+        messages.success(request, 'Your rating has been updated!')
+    
+    return redirect('recipes:detail', pk=recipe.pk)
+
+
+@login_required
+@require_POST
+def delete_rating_view(request, pk):
+    """Delete a user's rating for a recipe"""
+    recipe = get_object_or_404(Recipe, pk=pk)
+    
+    try:
+        rating = Rating.objects.get(recipe=recipe, user=request.user)
+        rating.delete()
+        messages.success(request, 'Your rating has been removed.')
+    except Rating.DoesNotExist:
+        messages.error(request, 'Rating not found.')
+    
+    return redirect('recipes:detail', pk=recipe.pk)
+
+
+@login_required
+@require_POST
+def add_comment_view(request, pk):
+    """Add a comment to a recipe"""
+    recipe = get_object_or_404(Recipe, pk=pk, is_published=True)
+    
+    text = request.POST.get('text', '').strip()
+    if not text:
+        messages.error(request, 'Comment text cannot be empty.')
+        return redirect('recipes:detail', pk=recipe.pk)
+    
+    if len(text) > 1000:
+        messages.error(request, 'Comment is too long (max 1000 characters).')
+        return redirect('recipes:detail', pk=recipe.pk)
+    
+    Comment.objects.create(
+        recipe=recipe,
+        user=request.user,
+        text=text
+    )
+    
+    messages.success(request, 'Your comment has been added!')
+    return redirect('recipes:detail', pk=recipe.pk)
+
+
+@login_required
+@require_POST
+def delete_comment_view(request, pk, comment_id):
+    """Delete a comment"""
+    recipe = get_object_or_404(Recipe, pk=pk)
+    comment = get_object_or_404(Comment, pk=comment_id, recipe=recipe)
+    
+    # Check permissions
+    if comment.user != request.user and not request.user.is_staff:
+        messages.error(request, 'You do not have permission to delete this comment.')
+        return redirect('recipes:detail', pk=recipe.pk)
+    
+    comment.delete()
+    messages.success(request, 'Comment deleted successfully.')
+    return redirect('recipes:detail', pk=recipe.pk)
+
+
+@login_required
+@require_POST
+def toggle_favorite_view(request, pk):
+    """Toggle favorite status for a recipe"""
+    recipe = get_object_or_404(Recipe, pk=pk, is_published=True)
+    
+    favorite, created = Favorite.objects.get_or_create(
+        recipe=recipe,
+        user=request.user
+    )
+    
+    if not created:
+        # Already favorited, remove it
+        favorite.delete()
+        messages.success(request, 'Recipe removed from favorites.')
+        is_favorited = False
+    else:
+        messages.success(request, 'Recipe added to favorites!')
+        is_favorited = True
+    
+    # Return JSON response for AJAX requests
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'success': True,
+            'is_favorited': is_favorited,
+            'favorite_count': recipe.favorites.count()
+        })
+    
+    return redirect('recipes:detail', pk=recipe.pk)
+
+
+@login_required
+def favorite_recipes_view(request):
+    """View user's favorite recipes"""
+    favorites = Favorite.objects.filter(
+        user=request.user
+    ).select_related('recipe', 'recipe__author', 'recipe__category').order_by('-created_at')
+    
+    recipes = [fav.recipe for fav in favorites if fav.recipe.is_published]
+    
+    paginator = Paginator(recipes, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'recipes/list.html', {
+        'recipes': page_obj,
+        'title': 'My Favorite Recipes',
         'categories': Category.objects.all()
     })

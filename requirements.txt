@@ -27,3 +27,8 @@ flake8>=6.0.0  # Linter
 # Security
 django-environ>=0.11.0  # Environment variable management
 
+# Supabase & OAuth
+requests>=2.31.0  # For Supabase API calls
+PyJWT>=2.8.0  # For JWT token verification
+supabase>=2.0.0  # Official Supabase Python client
+

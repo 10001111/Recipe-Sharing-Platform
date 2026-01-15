@@ -5,7 +5,7 @@ Forms for creating and editing recipes
 """
 
 from django import forms
-from .models import Recipe, Category, Ingredient, RecipeIngredient
+from .models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment
 
 
 class RecipeForm(forms.ModelForm):
@@ -122,4 +122,56 @@ class RecipeIngredientForm(forms.ModelForm):
 class RecipeIngredientFormSet(forms.BaseFormSet):
     """FormSet for managing multiple ingredients"""
     pass
+
+
+class RatingForm(forms.ModelForm):
+    """Form for rating a recipe"""
+    
+    class Meta:
+        model = Rating
+        fields = ['stars', 'review_text']
+        widgets = {
+            'stars': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': 1,
+                'max': 5,
+                'required': True
+            }),
+            'review_text': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'maxlength': 1000,
+                'placeholder': 'Optional: Write a review (max 1000 characters)'
+            }),
+        }
+        help_texts = {
+            'stars': 'Rate from 1 to 5 stars',
+            'review_text': 'Optional review text (max 1000 characters)',
+        }
+    
+    def clean_stars(self):
+        stars = self.cleaned_data.get('stars')
+        if stars and (stars < 1 or stars > 5):
+            raise forms.ValidationError('Rating must be between 1 and 5 stars.')
+        return stars
+
+
+class CommentForm(forms.ModelForm):
+    """Form for commenting on a recipe"""
+    
+    class Meta:
+        model = Comment
+        fields = ['text']
+        widgets = {
+            'text': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'maxlength': 1000,
+                'placeholder': 'Write your comment (max 1000 characters)',
+                'required': True
+            }),
+        }
+        help_texts = {
+            'text': 'Your comment (max 1000 characters)',
+        }
 

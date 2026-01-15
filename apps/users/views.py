@@ -16,9 +16,14 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.views.generic import DetailView
 from django.core.exceptions import PermissionDenied
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.conf import settings
+import json
 from .forms import CustomUserCreationForm, UserProfileForm
 from .models import UserProfile
 from .decorators import owner_or_role_required, role_required
+from .supabase_auth import get_supabase_user_info, sync_supabase_user
 
 User = get_user_model()
 
@@ -101,11 +106,58 @@ def login_view(request):
             error_message = "User isn't registered." if not user_exists else "Invalid password."
             return render(request, 'users/login.html', {
                 'login_error': error_message,
-                'username': username
+                'username': username,
+                'supabase_url': getattr(settings, 'SUPABASE_URL', ''),
+                'supabase_anon_key': getattr(settings, 'SUPABASE_ANON_KEY', ''),
             })
     
     # Render login template
-    return render(request, 'users/login.html')
+    supabase_url = getattr(settings, 'SUPABASE_URL', '')
+    supabase_anon_key = getattr(settings, 'SUPABASE_ANON_KEY', '')
+    return render(request, 'users/login.html', {
+        'supabase_url': supabase_url,
+        'supabase_anon_key': supabase_anon_key,
+    })
+
+
+@csrf_exempt
+def supabase_auth_callback(request):
+    """
+    Handle Supabase OAuth callback
+    
+    Receives Supabase session token and syncs with Django user
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            access_token = data.get('access_token')
+            
+            if not access_token:
+                return JsonResponse({'error': 'No access token provided'}, status=400)
+            
+            # Get user info from Supabase
+            supabase_user = get_supabase_user_info(access_token)
+            
+            if not supabase_user:
+                return JsonResponse({'error': 'Invalid token'}, status=400)
+            
+            # Sync with Django user
+            user = sync_supabase_user(supabase_user, request)
+            
+            if user:
+                return JsonResponse({
+                    'success': True,
+                    'redirect_url': '/users/profile/{}/'.format(user.username)
+                })
+            else:
+                return JsonResponse({'error': 'Failed to create user'}, status=400)
+                
+        except Exception as e:
+            import traceback
+            print(f"Supabase auth error: {traceback.format_exc()}")
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
 
 
 def logout_view(request):

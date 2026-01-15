@@ -6,6 +6,9 @@ Models:
 2. Ingredient - Ingredients with name, quantity, and unit
 3. Recipe - Main recipe model with title, description, instructions, times, images
 4. RecipeIngredient - Through model for Recipe-Ingredient many-to-many relationship
+5. Rating - User ratings for recipes (1-5 stars with review text)
+6. Comment - User comments on recipes
+7. Favorite - User saved/favorited recipes
 """
 
 from django.db import models
@@ -128,6 +131,12 @@ class Recipe(models.Model):
         help_text="Ingredients used in this recipe"
     )
     
+    # Statistics
+    view_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times this recipe has been viewed"
+    )
+    
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -154,6 +163,23 @@ class Recipe(models.Model):
     def total_time(self):
         """Calculate total time (prep + cook)"""
         return self.prep_time + self.cook_time
+    
+    @property
+    def average_rating(self):
+        """Calculate average rating from all ratings"""
+        from django.db.models import Avg
+        result = self.ratings.aggregate(avg_rating=Avg('stars'))
+        return round(result['avg_rating'] or 0.0, 2)
+    
+    @property
+    def rating_count(self):
+        """Get total number of ratings"""
+        return self.ratings.count()
+    
+    def increment_view_count(self):
+        """Increment view count"""
+        self.view_count += 1
+        self.save(update_fields=['view_count'])
 
 
 class RecipeIngredient(models.Model):
@@ -196,3 +222,115 @@ class RecipeIngredient(models.Model):
         if self.unit:
             return f"{self.quantity} {self.unit} {self.ingredient.name}"
         return f"{self.quantity} {self.ingredient.name}"
+
+
+class Rating(models.Model):
+    """
+    Rating Model - User ratings for recipes
+    
+    Allows users to rate recipes from 1-5 stars with optional review text
+    """
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='ratings',
+        help_text="Recipe being rated"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='recipe_ratings',
+        help_text="User who gave the rating"
+    )
+    stars = models.PositiveIntegerField(
+        choices=[(i, i) for i in range(1, 6)],
+        help_text="Rating from 1 to 5 stars"
+    )
+    review_text = models.TextField(
+        blank=True,
+        max_length=1000,
+        help_text="Optional review text (max 1000 characters)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['recipe', 'user']  # One rating per user per recipe
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipe', '-created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.stars} stars for {self.recipe.title}"
+
+
+class Comment(models.Model):
+    """
+    Comment Model - User comments on recipes
+    
+    Allows users to leave comments on recipes
+    """
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        help_text="Recipe being commented on"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='recipe_comments',
+        help_text="User who wrote the comment"
+    )
+    text = models.TextField(
+        max_length=1000,
+        help_text="Comment text (max 1000 characters)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipe', '-created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} commented on {self.recipe.title}"
+
+
+class Favorite(models.Model):
+    """
+    Favorite Model - User saved/favorited recipes
+    
+    Allows users to save/favorite recipes for later
+    """
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='favorites',
+        help_text="Recipe being favorited"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='favorite_recipes',
+        help_text="User who favorited the recipe"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['recipe', 'user']  # One favorite per user per recipe
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipe', '-created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+        verbose_name = "Favorite"
+        verbose_name_plural = "Favorites"
+    
+    def __str__(self):
+        return f"{self.user.username} favorited {self.recipe.title}"

@@ -25,6 +25,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECRET_KEY MUST be set in .env file - no default for security!
 SECRET_KEY = config('SECRET_KEY')
 
+# Supabase Configuration (for OAuth)
+SUPABASE_URL = config('SUPABASE_URL', default='')
+SUPABASE_ANON_KEY = config('SUPABASE_ANON_KEY', default='')
+SUPABASE_SERVICE_ROLE_KEY = config('SUPABASE_SERVICE_ROLE_KEY', default='')
+
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG should be set in .env file (defaults to False for safety)
 DEBUG = config('DEBUG', default=False, cast=bool)
@@ -181,7 +186,7 @@ AUTH_USER_MODEL = 'users.CustomUser'
 # CORS Settings (for frontend integration)
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000',
+    default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:8000',
     cast=Csv()
 )
 CORS_ALLOW_CREDENTIALS = True
