@@ -2,56 +2,99 @@
 
 import { useState, useRef } from 'react';
 import { uploadToBlob, deleteFromBlob } from '@/lib/vercel-blob';
+import { validateImage, formatFileSize, ImageValidationOptions } from '@/lib/image-validation';
+import { compressImage, getCompressionOptionsFor, getCompressionStats } from '@/lib/image-compression';
 
 interface ImageUploadBlobProps {
   onImageUrlChange: (url: string | null) => void;
   currentImageUrl?: string | null;
   label?: string;
   path?: string;
+  imageType?: 'recipe' | 'step' | 'avatar';
+  validationOptions?: ImageValidationOptions;
+  enableCompression?: boolean;
 }
 
 export default function ImageUploadBlob({ 
   onImageUrlChange, 
   currentImageUrl, 
   label = 'Recipe Image',
-  path = 'recipes/'
+  path = 'recipes/',
+  imageType = 'recipe',
+  validationOptions,
+  enableCompression = true,
 }: ImageUploadBlobProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(currentImageUrl || null);
   const [uploading, setUploading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compressionStats, setCompressionStats] = useState<{ original: string; compressed: string; reduction: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
-      return;
-    }
-    
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
-      return;
-    }
-
     setError(null);
+    setCompressionStats(null);
+    setCompressing(false);
     setUploading(true);
 
     try {
-      // Create preview immediately
+      // Step 1: Validate image
+      const validationResult = await validateImage(file, {
+        maxSizeMB: validationOptions?.maxSizeMB || 5,
+        maxWidth: validationOptions?.maxWidth,
+        maxHeight: validationOptions?.maxHeight,
+        minWidth: validationOptions?.minWidth,
+        minHeight: validationOptions?.minHeight,
+        checkDimensions: validationOptions?.checkDimensions !== false,
+      });
+
+      if (!validationResult.valid) {
+        setError(validationResult.error || 'Invalid image file');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        setUploading(false);
+        return;
+      }
+
+      // Step 2: Create preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
 
-      // Upload to Vercel Blob Storage
-      const blobResponse = await uploadToBlob(file, path);
+      // Step 3: Compress image (if enabled)
+      let fileToUpload = file;
+      if (enableCompression) {
+        setCompressing(true);
+        const compressionOptions = getCompressionOptionsFor(imageType);
+        fileToUpload = await compressImage(file, compressionOptions);
+        
+        // Update preview with compressed version
+        const compressedReader = new FileReader();
+        compressedReader.onloadend = () => {
+          setImagePreview(compressedReader.result as string);
+        };
+        compressedReader.readAsDataURL(fileToUpload);
+        
+        // Show compression stats
+        const stats = getCompressionStats(file, fileToUpload);
+        setCompressionStats({
+          original: formatFileSize(stats.originalSize),
+          compressed: formatFileSize(stats.compressedSize),
+          reduction: `${stats.reductionPercent}%`,
+        });
+        setCompressing(false);
+      }
+
+      // Step 4: Upload to Vercel Blob Storage
+      const blobResponse = await uploadToBlob(fileToUpload, path);
       
-      // Update parent with blob URL
+      // Step 5: Update parent with blob URL
       onImageUrlChange(blobResponse.url);
       setImagePreview(blobResponse.url);
     } catch (err: any) {
@@ -63,6 +106,7 @@ export default function ImageUploadBlob({
       }
     } finally {
       setUploading(false);
+      setCompressing(false);
     }
   };
 
@@ -156,18 +200,34 @@ export default function ImageUploadBlob({
         disabled={uploading}
       />
       
-      {uploading && (
+      {(uploading || compressing) && (
         <div style={{ 
           marginTop: '0.5rem', 
           color: '#666', 
           fontSize: '0.9rem' 
         }}>
-          ⏳ Uploading to Vercel Blob Storage...
+          {compressing ? '🔄 Compressing image...' : '⏳ Uploading to Vercel Blob Storage...'}
+        </div>
+      )}
+      
+      {compressionStats && !uploading && (
+        <div style={{ 
+          marginTop: '0.5rem', 
+          color: '#28a745', 
+          fontSize: '0.85rem',
+          padding: '0.5rem',
+          background: '#f0f9f0',
+          borderRadius: '4px'
+        }}>
+          ✓ Compressed: {compressionStats.original} → {compressionStats.compressed} ({compressionStats.reduction} reduction)
         </div>
       )}
       
       <small style={{ color: '#666', display: 'block', marginTop: '0.5rem' }}>
-        {currentImageUrl && !imagePreview ? 'Leave empty to keep current image' : 'Max file size: 5MB. Images stored on Vercel Blob Storage.'}
+        {currentImageUrl && !imagePreview ? 'Leave empty to keep current image' : 
+         enableCompression 
+           ? 'Max file size: 5MB. Images will be automatically compressed and optimized.'
+           : 'Max file size: 5MB. Images stored on Vercel Blob Storage.'}
       </small>
     </div>
   );

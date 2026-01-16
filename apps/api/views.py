@@ -217,7 +217,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 'ratings',
                 'comments',
                 'favorites',
-                'recipe_ingredients__ingredient'
+                'recipe_ingredients__ingredient',
+                'images'
             )
         else:
             queryset = Recipe.objects.filter(is_published=True).select_related('author', 'category').prefetch_related(
@@ -311,12 +312,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return queryset
     
     def create(self, request, *args, **kwargs):
-        """Handle recipe creation with ingredients"""
+        """Handle recipe creation with ingredients and images"""
+        import json
+        
         # Parse ingredients_data from FormData if it's a string
         if 'ingredients_data' in request.data:
             ingredients_data = request.data['ingredients_data']
             if isinstance(ingredients_data, str):
-                import json
                 try:
                     request.data._mutable = True
                     request.data['ingredients_data'] = json.loads(ingredients_data)
@@ -330,15 +332,35 @@ class RecipeViewSet(viewsets.ModelViewSet):
             request.data._mutable = True
             request.data['ingredients_data'] = []
             request.data._mutable = False
+        
+        # Parse images_data from FormData if it's a string
+        if 'images_data' in request.data:
+            images_data = request.data['images_data']
+            if isinstance(images_data, str):
+                try:
+                    request.data._mutable = True
+                    request.data['images_data'] = json.loads(images_data)
+                    request.data._mutable = False
+                except (json.JSONDecodeError, ValueError):
+                    request.data._mutable = True
+                    request.data['images_data'] = []
+                    request.data._mutable = False
+        else:
+            # If images_data is not provided, default to empty list
+            request.data._mutable = True
+            request.data['images_data'] = []
+            request.data._mutable = False
+        
         return super().create(request, *args, **kwargs)
     
     def update(self, request, *args, **kwargs):
-        """Handle recipe update with ingredients"""
+        """Handle recipe update with ingredients and images"""
+        import json
+        
         # Parse ingredients_data from FormData if it's a string
         if 'ingredients_data' in request.data:
             ingredients_data = request.data['ingredients_data']
             if isinstance(ingredients_data, str):
-                import json
                 try:
                     request.data._mutable = True
                     request.data['ingredients_data'] = json.loads(ingredients_data)
@@ -348,6 +370,21 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     request.data['ingredients_data'] = []
                     request.data._mutable = False
         # Note: If ingredients_data is not provided in update, we don't modify existing ingredients
+        
+        # Parse images_data from FormData if it's a string
+        if 'images_data' in request.data:
+            images_data = request.data['images_data']
+            if isinstance(images_data, str):
+                try:
+                    request.data._mutable = True
+                    request.data['images_data'] = json.loads(images_data)
+                    request.data._mutable = False
+                except (json.JSONDecodeError, ValueError):
+                    request.data._mutable = True
+                    request.data['images_data'] = []
+                    request.data._mutable = False
+        # Note: If images_data is not provided in update, we don't modify existing images
+        
         return super().update(request, *args, **kwargs)
     
     def perform_create(self, serializer):

@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { RecipeList } from '@/lib/api';
+import RecipeImage from './RecipeImage';
+import { getImageUrlOrPlaceholder } from '@/lib/placeholders';
 
 interface RecipeCardProps {
   recipe: RecipeList;
@@ -9,6 +11,13 @@ interface RecipeCardProps {
 
 export default function RecipeCard({ recipe }: RecipeCardProps) {
   const router = useRouter();
+
+  // Get primary image or first image, or use placeholder
+  const primaryImage = (recipe as any).images?.find((img: any) => img.is_primary) 
+    || (recipe as any).images?.[0] 
+    || null;
+  const imageUrl = primaryImage?.image_url || recipe.image || null;
+  const displayImageUrl = getImageUrlOrPlaceholder(imageUrl, 'recipe');
 
   return (
     <div 
@@ -23,23 +32,17 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
       }}
     >
       <div className="recipe-card">
-        {recipe.image ? (
-          <img 
-            src={recipe.image.startsWith('http') ? recipe.image : `http://127.0.0.1:8000${recipe.image}`}
-            alt={recipe.title}
-            className="recipe-card-image"
-          />
-        ) : (
-          <div className="recipe-card-image" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            fontSize: '3rem',
-            background: 'linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%)'
-          }}>
-            🍽️
-          </div>
-        )}
+        <RecipeImage
+          src={displayImageUrl}
+          alt={recipe.title}
+          placeholderType="recipe"
+          className="recipe-card-image"
+          style={{
+            width: '100%',
+            height: '200px',
+            objectFit: 'cover',
+          }}
+        />
         <div className="recipe-card-content">
           <h3 className="recipe-card-title">{recipe.title}</h3>
           <p className="recipe-card-description">{recipe.description}</p>

@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { recipeApi } from '@/lib/api';
-import ImageUpload from '@/components/ImageUpload';
+import ImageUploadBlob from '@/components/ImageUploadBlob';
+import ImageGallery, { ImageItem } from '@/components/ImageGallery';
 import IngredientForm, { Ingredient } from '@/components/IngredientForm';
 import InstructionStepEditor, { InstructionStep } from '@/components/InstructionStepEditor';
 import { uploadToBlob } from '@/lib/vercel-blob';
@@ -19,7 +20,8 @@ export default function CreateRecipePage() {
     dietary_restrictions: 'none',
     is_published: true,
   });
-  const [image, setImage] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null); // For backward compatibility
+  const [images, setImages] = useState<ImageItem[]>([]); // Multiple images
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [instructionSteps, setInstructionSteps] = useState<InstructionStep[]>([
     { id: '1', text: '', image: null, imageUrl: null }
@@ -79,8 +81,24 @@ export default function CreateRecipePage() {
       formDataToSend.append('dietary_restrictions', formData.dietary_restrictions);
       formDataToSend.append('is_published', formData.is_published.toString());
       formDataToSend.append('ingredients_data', JSON.stringify(ingredientsData));
-      if (image) {
-        formDataToSend.append('image', image);
+      
+      // Handle images: use multiple images if available, otherwise fall back to single image
+      if (images.length > 0) {
+        const imagesData = images.map(img => ({
+          image_url: img.image_url,
+          is_primary: img.is_primary,
+          order: img.order,
+          alt_text: img.alt_text || '',
+        }));
+        formDataToSend.append('images_data', JSON.stringify(imagesData));
+      } else if (imageUrl) {
+        // Backward compatibility: if only single image URL, create images_data with it
+        formDataToSend.append('images_data', JSON.stringify([{
+          image_url: imageUrl,
+          is_primary: true,
+          order: 0,
+          alt_text: '',
+        }]));
       }
 
       const recipe = await recipeApi.create(formDataToSend);
@@ -201,10 +219,28 @@ export default function CreateRecipePage() {
             </div>
           </div>
 
-          <ImageUpload 
-            onImageChange={setImage}
-            label="Recipe Image"
+          {/* Multiple Images Gallery */}
+          <ImageGallery
+            images={images}
+            onImagesChange={setImages}
+            maxImages={10}
+            imageType="recipe"
+            path="recipes/"
           />
+          
+          {/* Single Image Upload (for backward compatibility) */}
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e0e0e0' }}>
+            <small style={{ color: '#666', display: 'block', marginBottom: '0.5rem' }}>
+              Or upload a single image (legacy):
+            </small>
+            <ImageUploadBlob
+              onImageUrlChange={setImageUrl}
+              currentImageUrl={imageUrl}
+              label="Single Recipe Image (Optional)"
+              path="recipes/"
+              imageType="recipe"
+            />
+          </div>
 
           <IngredientForm 
             ingredients={ingredients}

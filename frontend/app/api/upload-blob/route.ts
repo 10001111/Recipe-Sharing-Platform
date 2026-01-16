@@ -33,18 +33,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    // Enhanced validation: Check MIME type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const fileMimeType = file.type.toLowerCase();
+    
+    if (!allowedTypes.includes(fileMimeType)) {
       return NextResponse.json(
-        { error: 'File must be an image' },
+        { error: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}` },
         { status: 400 }
       );
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    // Validate file size (max 5MB for recipes, configurable)
+    const maxSizeMB = 5;
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      const actualSizeMB = (file.size / (1024 * 1024)).toFixed(2);
       return NextResponse.json(
-        { error: 'File size must be less than 5MB' },
+        { error: `File size (${actualSizeMB}MB) exceeds maximum (${maxSizeMB}MB)` },
+        { status: 400 }
+      );
+    }
+
+    // Additional validation: Check file extension matches MIME type
+    const fileName = file.name.toLowerCase();
+    const extension = fileName.substring(fileName.lastIndexOf('.') + 1);
+    const mimeToExtension: { [key: string]: string[] } = {
+      'image/jpeg': ['jpg', 'jpeg'],
+      'image/jpg': ['jpg', 'jpeg'],
+      'image/png': ['png'],
+      'image/gif': ['gif'],
+      'image/webp': ['webp'],
+    };
+    
+    if (mimeToExtension[fileMimeType] && !mimeToExtension[fileMimeType].includes(extension)) {
+      return NextResponse.json(
+        { error: 'File extension does not match file type' },
         { status: 400 }
       );
     }

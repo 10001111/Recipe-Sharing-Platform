@@ -10,6 +10,9 @@ import CommentForm from '@/components/CommentForm';
 import CommentList from '@/components/CommentList';
 import FavoriteButton from '@/components/FavoriteButton';
 import InstructionDisplay from '@/components/InstructionDisplay';
+import RecipeImage from '@/components/RecipeImage';
+import ImageGallery from '@/components/ImageGallery';
+import { getImageUrlOrPlaceholder } from '@/lib/placeholders';
 
 export default function RecipeDetailPage() {
   const params = useParams();
@@ -280,7 +283,13 @@ export default function RecipeDetailPage() {
     );
   }
 
-  const imageUrl = getImageUrl(recipe.image || recipe.image_url);
+  // Get primary image or first image, or use placeholder
+  const primaryImage = (recipe as any).images?.find((img: any) => img.is_primary) 
+    || (recipe as any).images?.[0] 
+    || null;
+  const imageUrl = primaryImage?.image_url || recipe.image || recipe.image_url || null;
+  const displayImageUrl = imageUrl ? getImageUrl(imageUrl) : null;
+  const allImages = (recipe as any).images || [];
   const ingredients = formatIngredients((recipe as any).recipe_ingredients || [], ingredientScale);
 
   return (
@@ -303,8 +312,8 @@ export default function RecipeDetailPage() {
         ← Back to Recipes
       </button>
 
-      {/* Hero Image Section - Allrecipes Style */}
-      {imageUrl && (
+      {/* Hero Image Section - Primary Image */}
+      {displayImageUrl && (
         <div style={{ 
           width: '100%', 
           marginBottom: '2rem',
@@ -312,16 +321,44 @@ export default function RecipeDetailPage() {
           overflow: 'hidden',
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
         }}>
-          <img 
-            src={imageUrl}
+          <RecipeImage
+            src={displayImageUrl}
             alt={recipe.title}
-            style={{ 
-              width: '100%', 
+            placeholderType="recipe"
+            style={{
+              width: '100%',
               height: '500px',
-              objectFit: 'cover',
-              display: 'block'
             }}
+            objectFit="cover"
           />
+        </div>
+      )}
+
+      {/* Image Gallery - Multiple Images */}
+      {allImages.length > 1 && (
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: '#333' }}>
+            More Images ({allImages.length})
+          </h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: '1rem'
+          }}>
+            {allImages.map((img: any, index: number) => (
+              <RecipeImage
+                key={img.id || index}
+                src={img.image_url}
+                alt={img.alt_text || `${recipe.title} - Image ${index + 1}`}
+                placeholderType="recipe"
+                style={{
+                  width: '100%',
+                  height: '200px',
+                }}
+                objectFit="cover"
+              />
+            ))}
+          </div>
         </div>
       )}
 

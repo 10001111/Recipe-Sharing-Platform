@@ -5,7 +5,7 @@ Serializers for REST API endpoints
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.recipes.models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite
+from apps.recipes.models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage
 from apps.users.models import UserProfile
 
 User = get_user_model()
@@ -116,6 +116,15 @@ class FavoriteSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at']
 
 
+class RecipeImageSerializer(serializers.ModelSerializer):
+    """Serializer for RecipeImage model"""
+    
+    class Meta:
+        model = RecipeImage
+        fields = ['id', 'recipe', 'image_url', 'is_primary', 'order', 'alt_text', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class RecipeSerializer(serializers.ModelSerializer):
     """Serializer for Recipe model with statistics"""
     author = UserSerializer(read_only=True)
@@ -129,6 +138,8 @@ class RecipeSerializer(serializers.ModelSerializer):
     )
     recipe_ingredients = RecipeIngredientSerializer(many=True, read_only=True)
     ingredients_data = serializers.JSONField(write_only=True, required=False)
+    images = RecipeImageSerializer(many=True, read_only=True)
+    images_data = serializers.JSONField(write_only=True, required=False)
     
     # Statistics fields
     average_rating = serializers.ReadOnlyField()
@@ -158,6 +169,8 @@ class RecipeSerializer(serializers.ModelSerializer):
             'category_id',
             'recipe_ingredients',
             'ingredients_data',
+            'images',
+            'images_data',
             'dietary_restrictions',
             'view_count',
             'average_rating',
@@ -210,8 +223,9 @@ class RecipeSerializer(serializers.ModelSerializer):
         return None
     
     def create(self, validated_data):
-        """Create recipe and handle ingredients"""
+        """Create recipe and handle ingredients and images"""
         ingredients_data = validated_data.pop('ingredients_data', [])
+        images_data = validated_data.pop('images_data', [])
         recipe = Recipe.objects.create(**validated_data)
         
         # Handle ingredients
@@ -231,11 +245,24 @@ class RecipeSerializer(serializers.ModelSerializer):
                         notes=ing_data.get('notes', '')
                     )
         
+        # Handle images
+        if images_data:
+            for idx, img_data in enumerate(images_data):
+                if img_data.get('image_url'):
+                    RecipeImage.objects.create(
+                        recipe=recipe,
+                        image_url=img_data['image_url'],
+                        is_primary=img_data.get('is_primary', idx == 0),
+                        order=img_data.get('order', idx),
+                        alt_text=img_data.get('alt_text', '')
+                    )
+        
         return recipe
     
     def update(self, instance, validated_data):
-        """Update recipe and handle ingredients"""
+        """Update recipe and handle ingredients and images"""
         ingredients_data = validated_data.pop('ingredients_data', None)
+        images_data = validated_data.pop('images_data', None)
         
         # Update recipe fields
         for attr, value in validated_data.items():
@@ -262,6 +289,23 @@ class RecipeSerializer(serializers.ModelSerializer):
                             quantity=ing_data.get('quantity', 0),
                             unit=ing_data.get('unit', ''),
                             notes=ing_data.get('notes', '')
+                        )
+        
+        # Handle images if provided
+        if images_data is not None:
+            # Clear existing images
+            RecipeImage.objects.filter(recipe=instance).delete()
+            
+            # Add new images
+            if images_data:
+                for idx, img_data in enumerate(images_data):
+                    if img_data.get('image_url'):
+                        RecipeImage.objects.create(
+                            recipe=instance,
+                            image_url=img_data['image_url'],
+                            is_primary=img_data.get('is_primary', idx == 0),
+                            order=img_data.get('order', idx),
+                            alt_text=img_data.get('alt_text', '')
                         )
         
         return instance

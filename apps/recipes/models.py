@@ -354,3 +354,61 @@ class Favorite(models.Model):
     
     def __str__(self):
         return f"{self.user.username} favorited {self.recipe.title}"
+
+
+class RecipeImage(models.Model):
+    """
+    Recipe Image Model
+    
+    Supports multiple images per recipe with ordering and primary image designation
+    """
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='images',
+        help_text="Recipe this image belongs to"
+    )
+    image_url = models.URLField(
+        max_length=500,
+        help_text="URL from Vercel Blob Storage or other image hosting service"
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Primary/featured image for the recipe"
+    )
+    order = models.IntegerField(
+        default=0,
+        help_text="Display order (lower numbers appear first)"
+    )
+    alt_text = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Alt text for accessibility"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = "Recipe Image"
+        verbose_name_plural = "Recipe Images"
+        # Ensure only one primary image per recipe
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipe', 'is_primary'],
+                condition=models.Q(is_primary=True),
+                name='unique_primary_image_per_recipe'
+            )
+        ]
+    
+    def __str__(self):
+        return f"Image {self.order} for {self.recipe.title}"
+    
+    def save(self, *args, **kwargs):
+        # If this is set as primary, unset other primary images for this recipe
+        if self.is_primary:
+            RecipeImage.objects.filter(
+                recipe=self.recipe,
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+        super().save(*args, **kwargs)

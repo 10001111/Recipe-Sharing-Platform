@@ -11,7 +11,7 @@ Enhanced admin interface with:
 from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Avg
-from .models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite
+from .models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage
 
 
 @admin.register(Category)
@@ -61,6 +61,14 @@ class RecipeIngredientInline(admin.TabularInline):
     autocomplete_fields = ['ingredient']
 
 
+class RecipeImageInline(admin.TabularInline):
+    """Inline editing for RecipeImages"""
+    model = RecipeImage
+    extra = 1
+    fields = ['image_url', 'is_primary', 'order', 'alt_text']
+    readonly_fields = ['created_at', 'updated_at']
+
+
 class RatingInline(admin.TabularInline):
     """Inline editing for Ratings"""
     model = Rating
@@ -90,7 +98,7 @@ class RecipeAdmin(admin.ModelAdmin):
     list_filter = ['category', 'is_published', 'created_at', 'author']
     search_fields = ['title', 'description', 'author__username']
     readonly_fields = ['created_at', 'updated_at', 'view_count', 'rating_display']
-    inlines = [RecipeIngredientInline, RatingInline, CommentInline]
+    inlines = [RecipeIngredientInline, RecipeImageInline, RatingInline, CommentInline]
     autocomplete_fields = ['author', 'category']
     date_hierarchy = 'created_at'
     
@@ -238,3 +246,37 @@ class FavoriteAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at']
     autocomplete_fields = ['recipe', 'user']
     date_hierarchy = 'created_at'
+
+
+@admin.register(RecipeImage)
+class RecipeImageAdmin(admin.ModelAdmin):
+    """Admin interface for RecipeImage model"""
+    list_display = ['recipe', 'order', 'is_primary', 'image_preview', 'created_at']
+    list_filter = ['is_primary', 'created_at']
+    search_fields = ['recipe__title', 'alt_text', 'image_url']
+    readonly_fields = ['created_at', 'updated_at', 'image_preview']
+    autocomplete_fields = ['recipe']
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Image Information', {
+            'fields': ('recipe', 'image_url', 'alt_text', 'image_preview')
+        }),
+        ('Display Settings', {
+            'fields': ('is_primary', 'order')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def image_preview(self, obj):
+        """Display image preview"""
+        if obj.image_url:
+            return format_html(
+                '<img src="{}" style="max-width: 200px; max-height: 200px;" />',
+                obj.image_url
+            )
+        return 'No image'
+    image_preview.short_description = 'Preview'
