@@ -1,0 +1,40 @@
+# Python/Django files
+../venv/
+../env/
+../*.pyc
+../__pycache__/
+../db.sqlite3
+../media/
+../staticfiles/
+../static/
+
+# Django project files
+../apps/
+../config/
+../manage.py
+../requirements.txt
+
+# Documentation
+../docs/
+*.md
+!README.md
+
+# Scripts
+../scripts/
+../bats/
+../*.bat
+../*.sh
+
+# Environment files
+.env.local
+.env.*.local
+
+# Git
+../.git/
+../.gitignore
+
+# Build artifacts
+.next/
+out/
+dist/
+

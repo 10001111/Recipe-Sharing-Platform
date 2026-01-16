@@ -20,6 +20,9 @@
 @import './styles/base.css';
 @import './styles/components.css';
 @import './styles/layout.css';
+@import './styles/navbar-delish.css';
+@import './styles/footer-delish.css';
 @import './styles/recipes.css';
 @import './styles/homepage.css';
+@import './styles/recipe-detail.css';
 @import './styles/responsive.css';

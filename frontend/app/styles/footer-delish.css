@@ -1,0 +1,144 @@
+/**
+ * Delish-Inspired Footer Styles
+ * Minimalistic footer design
+ */
+
+.footer-delish {
+  background-color: #ffffff;
+  border-top: 1px solid #e5e5e5;
+  margin-top: 4rem;
+  padding: 3rem 0 2rem;
+}
+
+.footer-delish-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.footer-delish-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 3rem;
+  margin-bottom: 3rem;
+}
+
+.footer-delish-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-delish-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 1rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.footer-delish-description {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.footer-delish-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-delish-links li {
+  margin-bottom: 0.75rem;
+}
+
+.footer-delish-links a {
+  color: #666;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-delish-links a:hover {
+  color: #000;
+}
+
+.footer-delish-social {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.footer-delish-social a {
+  color: #666;
+  font-size: 1.25rem;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-delish-social a:hover {
+  color: #000;
+}
+
+.footer-delish-bottom {
+  border-top: 1px solid #e5e5e5;
+  padding-top: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-delish-copyright {
+  color: #999;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.footer-delish-legal {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.footer-delish-legal a {
+  color: #999;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-delish-legal a:hover {
+  color: #666;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .footer-delish {
+    padding: 2rem 0 1.5rem;
+  }
+
+  .footer-delish-container {
+    padding: 0 1rem;
+  }
+
+  .footer-delish-content {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .footer-delish-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .footer-delish-legal {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+

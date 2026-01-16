@@ -17,7 +17,7 @@ export default function FavoritesPage() {
   const loadFavorites = async () => {
     try {
       setLoading(true);
-      const favorites = await favoriteApi.getMine();
+      const favorites = await favoriteApi.getUserFavorites();
       const favoritesList = favorites.results || favorites;
       
       // Get recipe details for each favorite

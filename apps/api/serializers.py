@@ -128,6 +128,7 @@ class RecipeSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     recipe_ingredients = RecipeIngredientSerializer(many=True, read_only=True)
+    ingredients_data = serializers.JSONField(write_only=True, required=False)
     
     # Statistics fields
     average_rating = serializers.ReadOnlyField()
@@ -156,6 +157,8 @@ class RecipeSerializer(serializers.ModelSerializer):
             'category',
             'category_id',
             'recipe_ingredients',
+            'ingredients_data',
+            'dietary_restrictions',
             'view_count',
             'average_rating',
             'rating_count',
@@ -163,6 +166,7 @@ class RecipeSerializer(serializers.ModelSerializer):
             'comment_count',
             'is_favorited',
             'user_rating',
+            'dietary_restrictions',
             'is_published',
             'created_at',
             'updated_at',
@@ -204,6 +208,63 @@ class RecipeSerializer(serializers.ModelSerializer):
             except Rating.DoesNotExist:
                 return None
         return None
+    
+    def create(self, validated_data):
+        """Create recipe and handle ingredients"""
+        ingredients_data = validated_data.pop('ingredients_data', [])
+        recipe = Recipe.objects.create(**validated_data)
+        
+        # Handle ingredients
+        if ingredients_data:
+            for ing_data in ingredients_data:
+                if ing_data.get('name') and ing_data.get('quantity'):
+                    # Get or create ingredient
+                    ingredient, _ = Ingredient.objects.get_or_create(
+                        name=ing_data['name'].strip()
+                    )
+                    # Create RecipeIngredient
+                    RecipeIngredient.objects.create(
+                        recipe=recipe,
+                        ingredient=ingredient,
+                        quantity=ing_data.get('quantity', 0),
+                        unit=ing_data.get('unit', ''),
+                        notes=ing_data.get('notes', '')
+                    )
+        
+        return recipe
+    
+    def update(self, instance, validated_data):
+        """Update recipe and handle ingredients"""
+        ingredients_data = validated_data.pop('ingredients_data', None)
+        
+        # Update recipe fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Handle ingredients if provided
+        if ingredients_data is not None:
+            # Clear existing ingredients
+            RecipeIngredient.objects.filter(recipe=instance).delete()
+            
+            # Add new ingredients
+            if ingredients_data:
+                for ing_data in ingredients_data:
+                    if ing_data.get('name') and ing_data.get('quantity'):
+                        # Get or create ingredient
+                        ingredient, _ = Ingredient.objects.get_or_create(
+                            name=ing_data['name'].strip()
+                        )
+                        # Create RecipeIngredient
+                        RecipeIngredient.objects.create(
+                            recipe=instance,
+                            ingredient=ingredient,
+                            quantity=ing_data.get('quantity', 0),
+                            unit=ing_data.get('unit', ''),
+                            notes=ing_data.get('notes', '')
+                        )
+        
+        return instance
 
 
 class RecipeListSerializer(serializers.ModelSerializer):
@@ -226,6 +287,7 @@ class RecipeListSerializer(serializers.ModelSerializer):
             'image',
             'author',
             'category',
+            'dietary_restrictions',
             'average_rating',
             'rating_count',
             'favorite_count',

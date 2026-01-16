@@ -1,0 +1,48 @@
+# Python/Django files
+venv/
+env/
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+staticfiles/
+static/
+
+# Django project files
+apps/
+config/
+manage.py
+requirements.txt
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Scripts
+scripts/
+bats/
+*.bat
+*.sh
+
+# IDE
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Node modules (will be installed by Vercel)
+node_modules/
+
+# Build artifacts
+.next/
+out/
+dist/
+

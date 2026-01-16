@@ -1,36 +1,62 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, RecipeList } from '@/lib/api';
 import SearchAutocomplete from '@/components/SearchAutocomplete';
 import RecipeCard from '@/components/RecipeCard';
 
 type SortOption = 'newest' | 'oldest' | 'rating' | 'views' | 'title';
-type FilterOption = 'all' | 'breakfast' | 'lunch' | 'dinner' | 'dessert' | 'snack';
+type DietaryOption = 'all' | 'none' | 'vegetarian' | 'vegan' | 'gluten-free' | 'keto' | 'paleo' | 'pescatarian' | 'halal' | 'kosher';
 
 export default function RecipesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [recipes, setRecipes] = useState<RecipeList[]>([]);
-  const [filteredRecipes, setFilteredRecipes] = useState<RecipeList[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [category, setCategory] = useState<FilterOption>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [category, setCategory] = useState(searchParams.get('category') || 'all');
+  const [sortBy, setSortBy] = useState<SortOption>((searchParams.get('sort') as SortOption) || 'newest');
+  const [ingredients, setIngredients] = useState(searchParams.get('ingredients') || '');
+  const [maxPrepTime, setMaxPrepTime] = useState(searchParams.get('max_prep_time') || '');
+  const [maxCookTime, setMaxCookTime] = useState(searchParams.get('max_cook_time') || '');
+  const [maxTotalTime, setMaxTotalTime] = useState(searchParams.get('max_total_time') || '');
+  const [dietary, setDietary] = useState<DietaryOption>((searchParams.get('dietary') as DietaryOption) || 'all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  useEffect(() => {
-    loadRecipes();
-  }, []);
-
-  useEffect(() => {
-    filterAndSortRecipes();
-  }, [recipes, category, sortBy, searchQuery]);
-
-  const loadRecipes = async () => {
+  const loadRecipes = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await recipeApi.getAll();
+      const params: any = {};
+      
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+      if (category !== 'all') {
+        params.category = category;
+      }
+      if (sortBy) {
+        params.sort = sortBy;
+      }
+      if (ingredients.trim()) {
+        params.ingredients = ingredients.trim();
+      }
+      if (maxPrepTime) {
+        params.max_prep_time = parseInt(maxPrepTime);
+      }
+      if (maxCookTime) {
+        params.max_cook_time = parseInt(maxCookTime);
+      }
+      if (maxTotalTime) {
+        params.max_total_time = parseInt(maxTotalTime);
+      }
+      if (dietary !== 'all') {
+        params.dietary = dietary;
+      }
+
+      const response = await recipeApi.getAll(params);
       const recipesData = response.results || response;
       
       const normalizedRecipes = Array.isArray(recipesData) ? recipesData.map((recipe: any) => ({
@@ -48,52 +74,30 @@ export default function RecipesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, category, sortBy, ingredients, maxPrepTime, maxCookTime, maxTotalTime, dietary]);
 
-  const filterAndSortRecipes = () => {
-    let filtered = [...recipes];
-
-    // Filter by category
-    if (category !== 'all') {
-      filtered = filtered.filter(recipe => 
-        recipe.category?.name?.toLowerCase() === category.toLowerCase()
-      );
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(recipe =>
-        recipe.title.toLowerCase().includes(query) ||
-        recipe.description.toLowerCase().includes(query) ||
-        recipe.author.username.toLowerCase().includes(query)
-      );
-    }
-
-    // Sort recipes
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        case 'oldest':
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case 'rating':
-          return (b.average_rating || 0) - (a.average_rating || 0);
-        case 'views':
-          return (b.view_count || 0) - (a.view_count || 0);
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredRecipes(filtered);
-  };
+  // Load recipes on initial mount
+  useEffect(() => {
+    loadRecipes();
+  }, []);
 
   const handleSearchSelect = (recipe: RecipeList) => {
     router.push(`/recipes/${recipe.id}`);
   };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setCategory('all');
+    setSortBy('newest');
+    setIngredients('');
+    setMaxPrepTime('');
+    setMaxCookTime('');
+    setMaxTotalTime('');
+    setDietary('all');
+    setShowAdvancedFilters(false);
+  };
+
+  const hasActiveFilters = category !== 'all' || searchQuery || ingredients || maxPrepTime || maxCookTime || maxTotalTime || dietary !== 'all';
 
   return (
     <main className="container">
@@ -108,12 +112,17 @@ export default function RecipesPage() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           marginBottom: '2rem'
         }}>
+          {/* Basic Filters */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="form-label" style={{ marginBottom: '0.5rem' }}>Search Recipes</label>
-              <SearchAutocomplete 
-                onSelect={handleSearchSelect}
-                placeholder="Search by title, description, or author..."
+              <input
+                type="text"
+                className="form-input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by title or description..."
+                style={{ width: '100%' }}
               />
             </div>
             
@@ -121,9 +130,13 @@ export default function RecipesPage() {
               <label className="form-label" style={{ marginBottom: '0.5rem' }}>Category</label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as FilterOption)}
+                onChange={(e) => {
+                  e.preventDefault();
+                  setCategory(e.target.value);
+                }}
                 className="form-select"
-                style={{ width: '100%' }}
+                style={{ width: '100%', zIndex: 1 }}
+                onBlur={(e) => e.stopPropagation()}
               >
                 <option value="all">All Categories</option>
                 <option value="breakfast">Breakfast</option>
@@ -138,9 +151,13 @@ export default function RecipesPage() {
               <label className="form-label" style={{ marginBottom: '0.5rem' }}>Sort By</label>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                onChange={(e) => {
+                  e.preventDefault();
+                  setSortBy(e.target.value as SortOption);
+                }}
                 className="form-select"
-                style={{ width: '100%' }}
+                style={{ width: '100%', zIndex: 1 }}
+                onBlur={(e) => e.stopPropagation()}
               >
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
@@ -149,6 +166,128 @@ export default function RecipesPage() {
                 <option value="title">Title (A-Z)</option>
               </select>
             </div>
+
+            <div>
+              <label className="form-label" style={{ marginBottom: '0.5rem' }}>Dietary Restrictions</label>
+              <select
+                value={dietary}
+                onChange={(e) => {
+                  e.preventDefault();
+                  setDietary(e.target.value as DietaryOption);
+                }}
+                className="form-select"
+                style={{ width: '100%', zIndex: 1 }}
+                onBlur={(e) => e.stopPropagation()}
+              >
+                <option value="all">All</option>
+                <option value="none">No Restrictions</option>
+                <option value="vegetarian">Vegetarian</option>
+                <option value="vegan">Vegan</option>
+                <option value="gluten-free">Gluten-Free</option>
+                <option value="keto">Keto</option>
+                <option value="paleo">Paleo</option>
+                <option value="pescatarian">Pescatarian</option>
+                <option value="halal">Halal</option>
+                <option value="kosher">Kosher</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Advanced Filters Toggle */}
+          <div style={{ marginBottom: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="btn-outline"
+              style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+            >
+              {showAdvancedFilters ? '▼' : '▶'} Advanced Filters
+            </button>
+          </div>
+
+          {/* Advanced Filters */}
+          {showAdvancedFilters && (
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: '1rem',
+              padding: '1rem',
+              background: '#f8f9fa',
+              borderRadius: '8px',
+              marginBottom: '1rem'
+            }}>
+              <div>
+                <label className="form-label" style={{ marginBottom: '0.5rem' }}>Ingredients (comma-separated)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={ingredients}
+                  onChange={(e) => setIngredients(e.target.value)}
+                  placeholder="e.g., chicken, tomato, onion"
+                  style={{ width: '100%' }}
+                />
+                <small style={{ color: '#666', fontSize: '0.85rem' }}>Find recipes with these ingredients</small>
+              </div>
+
+              <div>
+                <label className="form-label" style={{ marginBottom: '0.5rem' }}>Max Prep Time (minutes)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={maxPrepTime}
+                  onChange={(e) => setMaxPrepTime(e.target.value)}
+                  placeholder="e.g., 30"
+                  min="0"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ marginBottom: '0.5rem' }}>Max Cook Time (minutes)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={maxCookTime}
+                  onChange={(e) => setMaxCookTime(e.target.value)}
+                  placeholder="e.g., 60"
+                  min="0"
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ marginBottom: '0.5rem' }}>Max Total Time (minutes)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={maxTotalTime}
+                  onChange={(e) => setMaxTotalTime(e.target.value)}
+                  placeholder="e.g., 90"
+                  min="0"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="btn-outline"
+                style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+              >
+                Clear All Filters
+              </button>
+            )}
+            <button
+              onClick={() => loadRecipes()}
+              className="btn-primary"
+              style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+            >
+              Apply Filters
+            </button>
           </div>
 
           {/* Results count */}
@@ -156,11 +295,14 @@ export default function RecipesPage() {
             paddingTop: '1rem', 
             borderTop: '1px solid #e0e0e0',
             fontSize: '0.9rem',
-            color: '#666'
+            color: '#666',
+            marginTop: '1rem'
           }}>
-            Showing {filteredRecipes.length} of {recipes.length} recipes
+            Showing {recipes.length} recipe{recipes.length !== 1 ? 's' : ''}
             {category !== 'all' && ` in ${category}`}
             {searchQuery && ` matching "${searchQuery}"`}
+            {ingredients && ` with ingredients: ${ingredients}`}
+            {dietary !== 'all' && ` (${dietary})`}
           </div>
         </div>
       </div>
@@ -169,17 +311,14 @@ export default function RecipesPage() {
         <div style={{ textAlign: 'center', padding: '3rem' }}>
           <p>Loading recipes...</p>
         </div>
-      ) : filteredRecipes.length === 0 ? (
+      ) : recipes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem' }}>
           <p style={{ fontSize: '1.2rem', color: '#666', marginBottom: '1rem' }}>
             No recipes found. Try adjusting your filters.
           </p>
-          {(category !== 'all' || searchQuery) && (
+          {hasActiveFilters && (
             <button
-              onClick={() => {
-                setCategory('all');
-                setSearchQuery('');
-              }}
+              onClick={clearFilters}
               className="btn-outline"
             >
               Clear Filters
@@ -188,7 +327,7 @@ export default function RecipesPage() {
         </div>
       ) : (
         <div className="recipe-grid">
-          {filteredRecipes.map((recipe) => (
+          {recipes.map((recipe) => (
             <RecipeCard key={recipe.id} recipe={recipe} />
           ))}
         </div>

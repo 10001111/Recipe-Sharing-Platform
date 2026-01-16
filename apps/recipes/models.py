@@ -137,6 +137,26 @@ class Recipe(models.Model):
         help_text="Number of times this recipe has been viewed"
     )
     
+    # Dietary Restrictions
+    DIETARY_CHOICES = [
+        ('none', 'No dietary restrictions'),
+        ('vegetarian', 'Vegetarian'),
+        ('vegan', 'Vegan'),
+        ('gluten-free', 'Gluten-Free'),
+        ('keto', 'Keto'),
+        ('paleo', 'Paleo'),
+        ('pescatarian', 'Pescatarian'),
+        ('halal', 'Halal'),
+        ('kosher', 'Kosher'),
+    ]
+    
+    dietary_restrictions = models.CharField(
+        max_length=20,
+        choices=DIETARY_CHOICES,
+        default='none',
+        help_text="Dietary restrictions for this recipe"
+    )
+    
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

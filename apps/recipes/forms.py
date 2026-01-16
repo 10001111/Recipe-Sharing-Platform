@@ -28,6 +28,7 @@ class RecipeForm(forms.ModelForm):
             'cook_time',
             'image',
             'category',
+            'dietary_restrictions',
             'is_published'
         ]
         widgets = {

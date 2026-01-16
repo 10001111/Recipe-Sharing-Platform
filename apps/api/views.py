@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError, NotFound
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q, Avg
 from django.contrib.auth import get_user_model
 from apps.recipes.models import Recipe, Rating, Comment, Favorite
 from apps.users.models import UserProfile
@@ -180,13 +180,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Recipe CRUD operations
     
-    list: Get all published recipes
-    retrieve: Get a single recipe with statistics
+    list: Get all published recipes (authors can see their own unpublished)
+    retrieve: Get a single recipe with statistics (authors can see their own unpublished)
     create: Create a new recipe (authenticated users only)
     update: Update a recipe (author or staff only)
     destroy: Delete a recipe (author or staff only)
     """
-    queryset = Recipe.objects.filter(is_published=True).select_related('author', 'category')
+    queryset = Recipe.objects.all().select_related('author', 'category')
     permission_classes = [IsAuthenticated]
     
     def get_serializer_class(self):
@@ -209,25 +209,78 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter recipes based on query parameters"""
         # Use prefetch_related to optimize statistics queries
-        queryset = Recipe.objects.filter(is_published=True).select_related('author', 'category').prefetch_related(
-            'ratings',
-            'comments',
-            'favorites'
-        )
+        # Allow authors to see their own unpublished recipes
+        if self.request.user.is_authenticated:
+            queryset = Recipe.objects.filter(
+                Q(is_published=True) | Q(author=self.request.user)
+            ).select_related('author', 'category').prefetch_related(
+                'ratings',
+                'comments',
+                'favorites',
+                'recipe_ingredients__ingredient'
+            )
+        else:
+            queryset = Recipe.objects.filter(is_published=True).select_related('author', 'category').prefetch_related(
+                'ratings',
+                'comments',
+                'favorites',
+                'recipe_ingredients__ingredient'
+            )
         
         # Filter by category
         category_slug = self.request.query_params.get('category', None)
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
         
-        # Search functionality
+        # Text search (recipe name, description)
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
                 Q(title__icontains=search) |
-                Q(description__icontains=search) |
-                Q(ingredients__name__icontains=search)
+                Q(description__icontains=search)
             ).distinct()
+        
+        # Ingredient-based search (find recipes by available ingredients)
+        ingredients = self.request.query_params.get('ingredients', None)
+        if ingredients:
+            # Support comma-separated list of ingredients
+            ingredient_list = [ing.strip() for ing in ingredients.split(',') if ing.strip()]
+            if ingredient_list:
+                queryset = queryset.filter(
+                    ingredients__name__in=ingredient_list
+                ).distinct()
+        
+        # Filter by prep time (max_prep_time)
+        max_prep_time = self.request.query_params.get('max_prep_time', None)
+        if max_prep_time:
+            try:
+                queryset = queryset.filter(prep_time__lte=int(max_prep_time))
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by cook time (max_cook_time)
+        max_cook_time = self.request.query_params.get('max_cook_time', None)
+        if max_cook_time:
+            try:
+                queryset = queryset.filter(cook_time__lte=int(max_cook_time))
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by total time (max_total_time)
+        max_total_time = self.request.query_params.get('max_total_time', None)
+        if max_total_time:
+            try:
+                max_time = int(max_total_time)
+                queryset = queryset.filter(
+                    Q(prep_time__lte=max_time) & Q(cook_time__lte=max_time)
+                )
+            except (ValueError, TypeError):
+                pass
+        
+        # Filter by dietary restrictions
+        dietary = self.request.query_params.get('dietary', None)
+        if dietary and dietary != 'all':
+            queryset = queryset.filter(dietary_restrictions=dietary)
         
         # Filter by author (ID or username)
         author_id = self.request.query_params.get('author', None)
@@ -238,11 +291,79 @@ class RecipeViewSet(viewsets.ModelViewSet):
         if author_id:
             queryset = queryset.filter(author_id=author_id)
         
-        return queryset.order_by('-created_at')
+        # Sort options
+        sort_by = self.request.query_params.get('sort', 'newest')
+        if sort_by == 'newest':
+            queryset = queryset.order_by('-created_at')
+        elif sort_by == 'oldest':
+            queryset = queryset.order_by('created_at')
+        elif sort_by == 'rating':
+            queryset = queryset.annotate(
+                avg_rating=Avg('ratings__stars')
+            ).order_by('-avg_rating', '-created_at')
+        elif sort_by == 'views':
+            queryset = queryset.order_by('-view_count', '-created_at')
+        elif sort_by == 'title':
+            queryset = queryset.order_by('title')
+        else:
+            queryset = queryset.order_by('-created_at')
+        
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        """Handle recipe creation with ingredients"""
+        # Parse ingredients_data from FormData if it's a string
+        if 'ingredients_data' in request.data:
+            ingredients_data = request.data['ingredients_data']
+            if isinstance(ingredients_data, str):
+                import json
+                try:
+                    request.data._mutable = True
+                    request.data['ingredients_data'] = json.loads(ingredients_data)
+                    request.data._mutable = False
+                except (json.JSONDecodeError, ValueError):
+                    request.data._mutable = True
+                    request.data['ingredients_data'] = []
+                    request.data._mutable = False
+        else:
+            # If ingredients_data is not provided, default to empty list
+            request.data._mutable = True
+            request.data['ingredients_data'] = []
+            request.data._mutable = False
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Handle recipe update with ingredients"""
+        # Parse ingredients_data from FormData if it's a string
+        if 'ingredients_data' in request.data:
+            ingredients_data = request.data['ingredients_data']
+            if isinstance(ingredients_data, str):
+                import json
+                try:
+                    request.data._mutable = True
+                    request.data['ingredients_data'] = json.loads(ingredients_data)
+                    request.data._mutable = False
+                except (json.JSONDecodeError, ValueError):
+                    request.data._mutable = True
+                    request.data['ingredients_data'] = []
+                    request.data._mutable = False
+        # Note: If ingredients_data is not provided in update, we don't modify existing ingredients
+        return super().update(request, *args, **kwargs)
     
     def perform_create(self, serializer):
         """Set the author to the current user"""
         serializer.save(author=self.request.user)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Retrieve a recipe - allow authors to see their own unpublished recipes"""
+        instance = self.get_object()
+        
+        # Check if recipe is published or user is the author
+        if not instance.is_published and instance.author != request.user and not request.user.is_staff:
+            raise NotFound("Recipe not found.")
+        
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
     
     def perform_update(self, serializer):
         """Check permissions before updating"""

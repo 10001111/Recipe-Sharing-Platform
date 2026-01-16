@@ -24,24 +24,9 @@ export default function LoginPage() {
     const fetchSupabaseConfig = async () => {
       setConfigLoading(true);
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-        const url = `${apiUrl}/api/config/supabase/`;
-        console.log('Fetching Supabase config from:', url);
+        const response = await api.get('/api/config/supabase/');
+        const config = response.data;
         
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-        
-        console.log('Response status:', response.status, response.statusText);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const config = await response.json();
         console.log('Supabase config received:', { 
           enabled: config.enabled, 
           has_url: !!config.supabase_url, 
@@ -57,8 +42,12 @@ export default function LoginPage() {
         } else {
           console.warn('Supabase config incomplete:', config);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching Supabase config:', err);
+        // Show user-friendly error message
+        if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error') || err.response?.status === undefined) {
+          console.error('Backend server is not running. Please start the Django backend on port 8000.');
+        }
         // Don't set error here - just log it, let the UI show the default message
       } finally {
         setConfigLoading(false);
@@ -83,9 +72,9 @@ export default function LoginPage() {
         checkOAuthCallback(supabase);
       }
       
-      // Listen for auth state changes (only when user explicitly signs in)
+      // Listen for auth state changes (only when user explicitly logs in)
       supabase.auth.onAuthStateChange(async (event: string, session: any) => {
-        // Only auto-sync if it's a new sign-in event (not on page load)
+        // Only auto-sync if it's a new log-in event (not on page load)
         if (event === 'SIGNED_IN' && session && hasOAuthParams) {
           await syncWithBackend(session.access_token);
         }
@@ -107,18 +96,11 @@ export default function LoginPage() {
   const syncWithBackend = async (accessToken: string) => {
     try {
       setGoogleLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/users/supabase-auth/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          access_token: accessToken
-        }),
-        credentials: 'include',
+      const response = await api.post('/users/supabase-auth/', {
+        access_token: accessToken
       });
 
-      const result = await response.json();
+      const result = response.data;
 
       if (result.success) {
         // Small delay to ensure session cookie is set
@@ -182,32 +164,29 @@ export default function LoginPage() {
       formDataToSend.append('username', formData.username);
       formDataToSend.append('password', formData.password);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/users/login/`, {
-        method: 'POST',
+      const response = await api.post('/users/login/', formDataToSend.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: formDataToSend.toString(),
-        credentials: 'include',
       });
 
-      if (response.ok) {
-        // Small delay to ensure session cookie is set
-        await new Promise(resolve => setTimeout(resolve, 100));
-        // Notify navbar to refresh auth state
-        window.dispatchEvent(new CustomEvent('authStateChanged'));
-        // If successful, redirect
-        const nextUrl = new URLSearchParams(window.location.search).get('next') || '/';
-        router.push(nextUrl);
-        // Force a full page reload to ensure session is picked up
-        setTimeout(() => {
-          window.location.href = nextUrl;
-        }, 200);
-      } else {
-        setError('Invalid username or password');
-      }
+      // Small delay to ensure session cookie is set
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Notify navbar to refresh auth state
+      window.dispatchEvent(new CustomEvent('authStateChanged'));
+      // If successful, redirect
+      const nextUrl = new URLSearchParams(window.location.search).get('next') || '/';
+      router.push(nextUrl);
+      // Force a full page reload to ensure session is picked up
+      setTimeout(() => {
+        window.location.href = nextUrl;
+      }, 200);
     } catch (err: any) {
-      setError('Failed to login. Please try again.');
+      if (err.response && err.response.status === 401) {
+        setError('Invalid username or password');
+      } else {
+        setError('Failed to login. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -321,7 +300,7 @@ export default function LoginPage() {
                   <path fill="white" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                   <path fill="white" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                 </svg>
-                Sign in with Google
+                Log in with Google
               </>
             )}
           </button>

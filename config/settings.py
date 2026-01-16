@@ -94,64 +94,78 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 # PostgreSQL Database Configuration (for Supabase)
-# If DB_NAME is not set, fall back to SQLite for local development
-try:
-    db_name = config('DB_NAME', default=None)
-    if db_name:
-        db_host = config('DB_HOST', default='localhost')
-        # Check if DB_HOST contains a full connection URL (common mistake)
-        # If it does, extract just the hostname
-        if db_host.startswith('postgresql://') or db_host.startswith('postgres://'):
-            # Extract hostname from connection string
-            # Format: postgresql://user:pass@host:port/dbname
-            import re
-            match = re.search(r'@([^:/]+)', db_host)
-            if match:
-                db_host = match.group(1)
-            else:
-                # If parsing fails, use SQLite
-                db_name = None
-        
-        if db_name:
-            DATABASES = {
-                'default': {
-                    'ENGINE': 'django.db.backends.postgresql',
-                    'NAME': db_name,
-                    'USER': config('DB_USER', default='postgres'),
-                    'PASSWORD': config('DB_PASSWORD', default=''),
-                    'HOST': db_host,
-                    'PORT': config('DB_PORT', default='5432'),
-                    'OPTIONS': {
-                        'connect_timeout': 5,  # 5 second timeout
-                    },
-                }
-            }
-        else:
-            # Fallback to SQLite if DB_NAME is None or invalid
-            DATABASES = {
-                'default': {
-                    'ENGINE': 'django.db.backends.sqlite3',
-                    'NAME': BASE_DIR / 'db.sqlite3',
-                }
-            }
-    else:
-        # Fallback to SQLite for local development without database setup
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-except Exception as e:
-    # If database config fails, use SQLite fallback
-    import warnings
-    warnings.warn(f'Database configuration error: {e}. Falling back to SQLite.')
+# Set USE_SQLITE=True in .env to force SQLite for local development
+# Or comment out DB_NAME to use SQLite automatically
+USE_SQLITE = config('USE_SQLITE', default=False, cast=bool)
+
+if USE_SQLITE:
+    # Force SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+else:
+    # Try PostgreSQL/Supabase configuration
+    try:
+        db_name = config('DB_NAME', default=None)
+        if db_name and db_name.strip() and db_name != 'your-database-password-here':
+            db_host = config('DB_HOST', default='localhost')
+            # Check if DB_HOST contains a full connection URL (common mistake)
+            # If it does, extract just the hostname
+            if db_host.startswith('postgresql://') or db_host.startswith('postgres://'):
+                # Extract hostname from connection string
+                # Format: postgresql://user:pass@host:port/dbname
+                import re
+                match = re.search(r'@([^:/]+)', db_host)
+                if match:
+                    db_host = match.group(1)
+                else:
+                    # If parsing fails, use SQLite
+                    db_name = None
+            
+            if db_name and db_name.strip() and db_name != 'your-database-password-here':
+                # Use PostgreSQL configuration
+                DATABASES = {
+                    'default': {
+                        'ENGINE': 'django.db.backends.postgresql',
+                        'NAME': db_name,
+                        'USER': config('DB_USER', default='postgres'),
+                        'PASSWORD': config('DB_PASSWORD', default=''),
+                        'HOST': db_host,
+                        'PORT': config('DB_PORT', default='5432'),
+                        'OPTIONS': {
+                            'connect_timeout': 5,  # 5 second timeout
+                        },
+                    }
+                }
+            else:
+                # Fallback to SQLite if DB_NAME is None or invalid
+                DATABASES = {
+                    'default': {
+                        'ENGINE': 'django.db.backends.sqlite3',
+                        'NAME': BASE_DIR / 'db.sqlite3',
+                    }
+                }
+        else:
+            # Fallback to SQLite for local development without database setup
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': BASE_DIR / 'db.sqlite3',
+                }
+            }
+    except Exception as e:
+        # If database config fails, use SQLite fallback
+        import warnings
+        warnings.warn(f'Database configuration error: {e}. Falling back to SQLite.')
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 
 # Password validation
@@ -195,8 +209,15 @@ STATICFILES_DIRS = [
 ]
 
 # Media files (User uploads)
+# For production, use Vercel Blob Storage or cloud storage
+# Images will be stored via Vercel Blob API, not in local media folder
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Vercel Blob Storage Configuration (for production)
+VERCEL_BLOB_STORE_ID = config('VERCEL_BLOB_STORE_ID', default='')
+VERCEL_BLOB_READ_WRITE_TOKEN = config('VERCEL_BLOB_READ_WRITE_TOKEN', default='')
+VERCEL_BLOB_STORE_URL = config('VERCEL_BLOB_STORE_URL', default='')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -227,3 +248,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20
 }
+
+# Security Settings for Production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'

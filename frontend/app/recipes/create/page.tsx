@@ -5,20 +5,25 @@ import { useRouter } from 'next/navigation';
 import { recipeApi } from '@/lib/api';
 import ImageUpload from '@/components/ImageUpload';
 import IngredientForm, { Ingredient } from '@/components/IngredientForm';
+import InstructionStepEditor, { InstructionStep } from '@/components/InstructionStepEditor';
+import { uploadToBlob } from '@/lib/vercel-blob';
 
 export default function CreateRecipePage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    instructions: '',
     prep_time: '',
     cook_time: '',
     category: '',
+    dietary_restrictions: 'none',
     is_published: true,
   });
   const [image, setImage] = useState<File | null>(null);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [instructionSteps, setInstructionSteps] = useState<InstructionStep[]>([
+    { id: '1', text: '', image: null, imageUrl: null }
+  ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,16 +33,52 @@ export default function CreateRecipePage() {
     setLoading(true);
 
     try {
+      // Process instruction steps: upload images and format as JSON
+      const processedSteps = await Promise.all(
+        instructionSteps.map(async (step) => {
+          let imageUrl = step.imageUrl || null;
+          
+          // Upload step image if provided
+          if (step.image) {
+            try {
+              const blobResponse = await uploadToBlob(step.image, 'recipe-steps/');
+              imageUrl = blobResponse.url;
+            } catch (err) {
+              console.error('Error uploading step image:', err);
+              // Fall back to FormData upload if blob fails
+            }
+          }
+          
+          return {
+            text: step.text,
+            imageUrl: imageUrl,
+          };
+        })
+      );
+
+      // Format instructions as JSON string
+      const instructionsJson = JSON.stringify(processedSteps);
+
+      // Format ingredients data
+      const ingredientsData = ingredients.map(ing => ({
+        name: ing.name,
+        quantity: parseFloat(ing.quantity) || 0,
+        unit: ing.unit || '',
+        notes: ing.notes || '',
+      }));
+
       const formDataToSend = new FormData();
       formDataToSend.append('title', formData.title);
       formDataToSend.append('description', formData.description);
-      formDataToSend.append('instructions', formData.instructions);
+      formDataToSend.append('instructions', instructionsJson);
       formDataToSend.append('prep_time', formData.prep_time);
       formDataToSend.append('cook_time', formData.cook_time);
       if (formData.category) {
         formDataToSend.append('category_id', formData.category);
       }
+      formDataToSend.append('dietary_restrictions', formData.dietary_restrictions);
       formDataToSend.append('is_published', formData.is_published.toString());
+      formDataToSend.append('ingredients_data', JSON.stringify(ingredientsData));
       if (image) {
         formDataToSend.append('image', image);
       }
@@ -92,16 +133,10 @@ export default function CreateRecipePage() {
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Instructions *</label>
-            <textarea
-              className="form-textarea"
-              value={formData.instructions}
-              onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
-              required
-              rows={10}
-            />
-          </div>
+          <InstructionStepEditor 
+            steps={instructionSteps}
+            onChange={setInstructionSteps}
+          />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
@@ -129,20 +164,41 @@ export default function CreateRecipePage() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Category</label>
-            <select
-              className="form-select"
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            >
-              <option value="">Select a category</option>
-              <option value="1">Breakfast</option>
-              <option value="2">Lunch</option>
-              <option value="3">Dinner</option>
-              <option value="4">Dessert</option>
-              <option value="5">Snack</option>
-            </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">Category</label>
+              <select
+                className="form-select"
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              >
+                <option value="">Select a category</option>
+                <option value="1">Breakfast</option>
+                <option value="2">Lunch</option>
+                <option value="3">Dinner</option>
+                <option value="4">Dessert</option>
+                <option value="5">Snack</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Dietary Restrictions</label>
+              <select
+                className="form-select"
+                value={formData.dietary_restrictions}
+                onChange={(e) => setFormData({ ...formData, dietary_restrictions: e.target.value })}
+              >
+                <option value="none">No Restrictions</option>
+                <option value="vegetarian">Vegetarian</option>
+                <option value="vegan">Vegan</option>
+                <option value="gluten-free">Gluten-Free</option>
+                <option value="keto">Keto</option>
+                <option value="paleo">Paleo</option>
+                <option value="pescatarian">Pescatarian</option>
+                <option value="halal">Halal</option>
+                <option value="kosher">Kosher</option>
+              </select>
+            </div>
           </div>
 
           <ImageUpload 

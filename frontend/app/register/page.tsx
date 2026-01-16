@@ -26,24 +26,9 @@ export default function RegisterPage() {
     const fetchSupabaseConfig = async () => {
       setConfigLoading(true);
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-        const url = `${apiUrl}/api/config/supabase/`;
-        console.log('Fetching Supabase config from:', url);
+        const response = await api.get('/api/config/supabase/');
+        const config = response.data;
         
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-        
-        console.log('Response status:', response.status, response.statusText);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const config = await response.json();
         console.log('Supabase config received:', { 
           enabled: config.enabled, 
           has_url: !!config.supabase_url, 
@@ -59,8 +44,12 @@ export default function RegisterPage() {
         } else {
           console.warn('Supabase config incomplete:', config);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching Supabase config:', err);
+        // Show user-friendly error message
+        if (err.code === 'ECONNREFUSED' || err.message?.includes('Network Error') || err.response?.status === undefined) {
+          console.error('Backend server is not running. Please start the Django backend on port 8000.');
+        }
         // Don't set error here - just log it, let the UI show the default message
       } finally {
         setConfigLoading(false);
@@ -85,9 +74,9 @@ export default function RegisterPage() {
         checkOAuthCallback(supabase);
       }
       
-      // Listen for auth state changes (only when user explicitly signs in)
+      // Listen for auth state changes (only when user explicitly logs in)
       supabase.auth.onAuthStateChange(async (event: string, session: any) => {
-        // Only auto-sync if it's a new sign-in event (not on page load)
+        // Only auto-sync if it's a new log-in event (not on page load)
         if (event === 'SIGNED_IN' && session && hasOAuthParams) {
           await syncWithBackend(session.access_token);
         }
@@ -109,18 +98,11 @@ export default function RegisterPage() {
   const syncWithBackend = async (accessToken: string) => {
     try {
       setGoogleLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/users/supabase-auth/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          access_token: accessToken
-        }),
-        credentials: 'include',
+      const response = await api.post('/users/supabase-auth/', {
+        access_token: accessToken
       });
 
-      const result = await response.json();
+      const result = response.data;
 
       if (result.success) {
         // Small delay to ensure session cookie is set
@@ -197,34 +179,26 @@ export default function RegisterPage() {
       formDataToSend.append('password1', formData.password1);
       formDataToSend.append('password2', formData.password2);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/users/register/`, {
-        method: 'POST',
+      const response = await api.post('/users/register/', formDataToSend.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: formDataToSend.toString(),
-        credentials: 'include',
       });
 
-      if (response.ok) {
-        // Small delay to ensure session cookie is set
-        await new Promise(resolve => setTimeout(resolve, 100));
-        // Notify navbar to refresh auth state
-        window.dispatchEvent(new CustomEvent('authStateChanged'));
-        // Force a full page reload to ensure session is picked up
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 200);
-      } else {
-        const data = await response.json().catch(() => ({}));
-        if (data) {
-          setErrors(data);
-        } else {
-          setErrors({ general: 'Registration failed. Please try again.' });
-        }
-      }
+      // Small delay to ensure session cookie is set
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Notify navbar to refresh auth state
+      window.dispatchEvent(new CustomEvent('authStateChanged'));
+      // Force a full page reload to ensure session is picked up
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 200);
     } catch (err: any) {
-      setErrors({ general: 'Registration failed. Please try again.' });
+      if (err.response && err.response.data) {
+        setErrors(err.response.data);
+      } else {
+        setErrors({ general: 'Registration failed. Please try again.' });
+      }
     } finally {
       setLoading(false);
     }
