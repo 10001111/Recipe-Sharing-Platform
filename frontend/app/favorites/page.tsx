@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { favoriteApi, RecipeList } from '@/lib/api';
 import { recipeApi } from '@/lib/api';
+import RecipeCard from '@/components/RecipeCard';
+import { RecipeGridSkeleton } from '@/components/LoadingSkeleton';
 
 export default function FavoritesPage() {
+  const router = useRouter();
   const [recipes, setRecipes] = useState<RecipeList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,17 +24,30 @@ export default function FavoritesPage() {
       const favorites = await favoriteApi.getUserFavorites();
       const favoritesList = favorites.results || favorites;
       
-      // Get recipe details for each favorite
-      const recipePromises = favoritesList.map((fav: any) => 
-        recipeApi.getById(fav.recipe)
-      );
-      
-      const recipeData = await Promise.all(recipePromises);
-      setRecipes(recipeData);
+      if (Array.isArray(favoritesList) && favoritesList.length > 0) {
+        // Get recipe details for each favorite
+        const recipePromises = favoritesList.map((fav: any) => 
+          recipeApi.getById(fav.recipe)
+        );
+        
+        const recipeData = await Promise.all(recipePromises);
+        const normalizedRecipes = recipeData.map((recipe: any) => ({
+          ...recipe,
+          view_count: Number(recipe.view_count || 0),
+          comment_count: Number(recipe.comment_count || 0),
+          favorite_count: Number(recipe.favorite_count || 0),
+          rating_count: Number(recipe.rating_count || 0),
+          average_rating: Number(recipe.average_rating || 0),
+        }));
+        setRecipes(normalizedRecipes);
+      } else {
+        setRecipes([]);
+      }
       setError(null);
     } catch (err: any) {
       if (err.response?.status === 401) {
         setError('Please login to view your favorites.');
+        router.push('/login');
       } else {
         setError('Failed to load favorites.');
       }
@@ -73,46 +90,30 @@ export default function FavoritesPage() {
         </div>
       )}
 
-      {!loading && recipes.length > 0 && (
-        <div className="recipe-grid">
-          {recipes.map((recipe) => (
-            <Link key={recipe.id} href={`/recipes/${recipe.id}`}>
-              <div className="recipe-card">
-                {recipe.image ? (
-                  <img 
-                    src={recipe.image.startsWith('http') ? recipe.image : `http://127.0.0.1:8000${recipe.image}`}
-                    alt={recipe.title}
-                    className="recipe-card-image"
-                  />
-                ) : (
-                  <div className="recipe-card-image" style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    fontSize: '3rem'
-                  }}>
-                    🍽️
-                  </div>
-                )}
-                <div className="recipe-card-content">
-                  <h3 className="recipe-card-title">{recipe.title}</h3>
-                  <p className="recipe-card-description">{recipe.description}</p>
-                  <div className="recipe-card-meta">
-                    <span>👤 {recipe.author.username}</span>
-                    <div className="recipe-card-rating">
-                      <span className="star">⭐</span>
-                      <span>{recipe.average_rating.toFixed(1)}</span>
-                      <span style={{ marginLeft: '0.5rem', color: '#999' }}>
-                        ({recipe.rating_count})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+      {loading ? (
+        <RecipeGridSkeleton />
+      ) : recipes.length > 0 ? (
+        <>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '1.5rem'
+          }}>
+            <p style={{ color: '#666', fontSize: '1rem' }}>
+              You have {recipes.length} favorite{recipes.length !== 1 ? 's' : ''}
+            </p>
+            <Link href="/recipes" className="btn-outline">
+              Browse More Recipes
             </Link>
-          ))}
-        </div>
-      )}
+          </div>
+          <div className="recipe-grid">
+            {recipes.map((recipe) => (
+              <RecipeCard key={recipe.id} recipe={recipe} />
+            ))}
+          </div>
+        </>
+      ) : null}
     </main>
   );
 }

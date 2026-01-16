@@ -142,6 +142,9 @@ export default function Navbar() {
               <Link href="/recipes/create" className="navbar-delish-link">
                 Create Recipe
               </Link>
+              <Link href="/dashboard" className="navbar-delish-link">
+                Dashboard
+              </Link>
               <Link href="/favorites" className="navbar-delish-link">
                 My Favorites
               </Link>

@@ -404,11 +404,19 @@ class RatingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """Filter ratings by recipe if provided"""
+        """Filter ratings by recipe or user if provided"""
         queryset = Rating.objects.select_related('user', 'recipe')
         recipe_id = self.request.query_params.get('recipe', None)
+        user_id = self.request.query_params.get('user', None)
+        
         if recipe_id:
             queryset = queryset.filter(recipe_id=recipe_id)
+        elif user_id:
+            queryset = queryset.filter(user_id=user_id)
+        elif self.request.user.is_authenticated and self.request.query_params.get('mine') == 'true':
+            # Get current user's ratings
+            queryset = queryset.filter(user=self.request.user)
+        
         return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):
@@ -459,11 +467,20 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """Filter comments by recipe if provided"""
+        """Filter comments by recipe or user if provided"""
         queryset = Comment.objects.select_related('user', 'recipe')
         recipe_id = self.request.query_params.get('recipe', None)
+        user_id = self.request.query_params.get('user', None)
+        mine = self.request.query_params.get('mine', None)
+        
         if recipe_id:
             queryset = queryset.filter(recipe_id=recipe_id)
+        elif user_id:
+            queryset = queryset.filter(user_id=user_id)
+        elif mine == 'true' and self.request.user.is_authenticated:
+            # Get current user's comments
+            queryset = queryset.filter(user=self.request.user)
+        
         return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):

@@ -28,13 +28,21 @@ export default function RecipeDetailPage() {
   const [ingredientScale, setIngredientScale] = useState(1); // For scaling ingredients
 
   useEffect(() => {
-    if (recipeId) {
-      Promise.all([
-        checkCurrentUser(),
-        loadRecipe(),
-        loadRatings(),
-        loadComments()
-      ]);
+    if (recipeId && !isNaN(recipeId)) {
+      // Load recipe first, then load ratings/comments
+      checkCurrentUser();
+      loadRecipe().then((success) => {
+        // Only load ratings/comments if recipe loaded successfully
+        if (success) {
+          loadRatings();
+          loadComments();
+        }
+      }).catch(() => {
+        // Recipe failed to load, don't load ratings/comments
+      });
+    } else {
+      setError('Invalid recipe ID');
+      setLoading(false);
     }
   }, [recipeId]);
 
@@ -55,9 +63,18 @@ export default function RecipeDetailPage() {
     }
   };
 
-  const loadRecipe = async () => {
+  const loadRecipe = async (): Promise<boolean> => {
     try {
       setError(null);
+      setLoading(true);
+      
+      // Validate recipeId
+      if (!recipeId || isNaN(recipeId)) {
+        setError('Invalid recipe ID');
+        setLoading(false);
+        return false;
+      }
+      
       const data = await recipeApi.getById(recipeId);
       setRecipe(data);
       setIsFavorited(data.is_favorited || false);
@@ -69,14 +86,38 @@ export default function RecipeDetailPage() {
       } else {
         setIsAuthor(false);
       }
-      await recipeApi.incrementView(recipeId);
+      
+      // Try to increment view count, but don't fail if it errors
+      try {
+        await recipeApi.incrementView(recipeId);
+      } catch (viewError) {
+        console.warn('Failed to increment view count:', viewError);
+      }
+      
+      return true;
     } catch (error: any) {
       console.error('Error loading recipe:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url
+      });
+      
       if (error.response?.status === 404) {
-        setError('Recipe not found');
+        setError(`Recipe #${recipeId} not found. It may have been deleted or is not published.`);
+      } else if (error.response?.status === 403) {
+        setError('You do not have permission to view this recipe.');
+      } else if (error.response?.status >= 500) {
+        setError('Server error. Please try again later.');
+      } else if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        setError('Cannot connect to server. Please make sure the backend is running on http://127.0.0.1:8000');
       } else {
-        setError('Failed to load recipe. Please try again.');
+        setError(`Failed to load recipe: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
       }
+      
+      return false;
     } finally {
       setLoading(false);
     }
