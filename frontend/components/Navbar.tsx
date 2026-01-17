@@ -148,6 +148,9 @@ export default function Navbar() {
               <Link href="/favorites" className="navbar-delish-link">
                 My Favorites
               </Link>
+              <Link href="/meal-plan" className="navbar-delish-link">
+                Meal Plan
+              </Link>
             </>
           )}
         </div>

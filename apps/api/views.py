@@ -7,12 +7,12 @@ from rest_framework.exceptions import ValidationError, NotFound
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg
 from django.contrib.auth import get_user_model
-from apps.recipes.models import Recipe, Rating, Comment, Favorite
+from apps.recipes.models import Recipe, Rating, Comment, Favorite, MealPlan
 from apps.users.models import UserProfile
 from .serializers import (
     RecipeSerializer, RecipeListSerializer,
     RatingSerializer, CommentSerializer, FavoriteSerializer,
-    UserProfileSerializer
+    UserProfileSerializer, MealPlanSerializer
 )
 
 User = get_user_model()
@@ -616,3 +616,77 @@ class FavoriteViewSet(viewsets.ModelViewSet):
             'is_favorited': is_favorited,
             'favorite_count': recipe.favorites.count()
         }, status=status.HTTP_200_OK)
+
+
+class MealPlanViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for MealPlan model
+    Allows users to plan meals on specific dates
+    """
+    serializer_class = MealPlanSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter meal plans by current user and optional date range"""
+        queryset = MealPlan.objects.filter(user=self.request.user).select_related('recipe', 'user').order_by('date', 'meal_type')
+        
+        # Filter by date range if provided
+        start_date = self.request.query_params.get('start_date', None)
+        end_date = self.request.query_params.get('end_date', None)
+        
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        
+        # Filter by meal type if provided
+        meal_type = self.request.query_params.get('meal_type', None)
+        if meal_type:
+            queryset = queryset.filter(meal_type=meal_type)
+        
+        return queryset
+    
+    def perform_create(self, serializer):
+        """Set user to current user"""
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'], url_path='export/ical')
+    def export_ical(self, request):
+        """Export meal plans as iCal format"""
+        from django.http import HttpResponse
+        from datetime import datetime
+        
+        queryset = self.get_queryset()
+        
+        # Generate iCal content
+        ical_content = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Recipe Sharing Platform//Meal Plans//EN',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+        ]
+        
+        for meal_plan in queryset:
+            # Format date for iCal (YYYYMMDD)
+            date_str = meal_plan.date.strftime('%Y%m%d')
+            
+            # Create event
+            ical_content.extend([
+                'BEGIN:VEVENT',
+                f'UID:mealplan-{meal_plan.id}@recipesharing.com',
+                f'DTSTART;VALUE=DATE:{date_str}',
+                f'DTEND;VALUE=DATE:{date_str}',
+                f'SUMMARY:{meal_plan.recipe.title} - {meal_plan.get_meal_type_display()}',
+                f'DESCRIPTION:{meal_plan.recipe.description[:200]}',
+                f'LOCATION:Kitchen',
+                f'STATUS:CONFIRMED',
+                f'SEQUENCE:0',
+                'END:VEVENT',
+            ])
+        
+        ical_content.append('END:VCALENDAR')
+        
+        response = HttpResponse('\r\n'.join(ical_content), content_type='text/calendar')
+        response['Content-Disposition'] = 'attachment; filename="meal-plans.ics"'
+        return response

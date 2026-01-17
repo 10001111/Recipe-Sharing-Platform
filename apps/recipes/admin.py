@@ -11,7 +11,7 @@ Enhanced admin interface with:
 from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count, Avg
-from .models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage
+from .models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage, MealPlan
 
 
 @admin.register(Category)
@@ -280,3 +280,29 @@ class RecipeImageAdmin(admin.ModelAdmin):
             )
         return 'No image'
     image_preview.short_description = 'Preview'
+
+
+@admin.register(MealPlan)
+class MealPlanAdmin(admin.ModelAdmin):
+    """Admin interface for MealPlan model"""
+    list_display = ['user', 'recipe', 'date', 'meal_type_display', 'created_at']
+    list_filter = ['meal_type', 'date', 'created_at']
+    search_fields = ['user__username', 'recipe__title', 'notes']
+    readonly_fields = ['created_at', 'updated_at']
+    autocomplete_fields = ['user', 'recipe']
+    date_hierarchy = 'date'
+    
+    fieldsets = (
+        ('Meal Plan Information', {
+            'fields': ('user', 'recipe', 'date', 'meal_type', 'notes')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def meal_type_display(self, obj):
+        """Display meal type"""
+        return obj.get_meal_type_display()
+    meal_type_display.short_description = 'Meal Type'

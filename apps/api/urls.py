@@ -10,6 +10,7 @@ router.register(r'recipes', views.RecipeViewSet, basename='recipe')
 router.register(r'ratings', views.RatingViewSet, basename='rating')
 router.register(r'comments', views.CommentViewSet, basename='comment')
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite')
+router.register(r'meal-plans', views.MealPlanViewSet, basename='mealplan')
 
 urlpatterns = [
     # API root and health check

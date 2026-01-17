@@ -5,7 +5,7 @@ Serializers for REST API endpoints
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.recipes.models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage
+from apps.recipes.models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage, MealPlan
 from apps.users.models import UserProfile
 
 User = get_user_model()
@@ -123,6 +123,40 @@ class RecipeImageSerializer(serializers.ModelSerializer):
         model = RecipeImage
         fields = ['id', 'recipe', 'image_url', 'is_primary', 'order', 'alt_text', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class MealPlanSerializer(serializers.ModelSerializer):
+    """Serializer for MealPlan model"""
+    recipe_title = serializers.CharField(source='recipe.title', read_only=True)
+    recipe_id = serializers.PrimaryKeyRelatedField(
+        queryset=Recipe.objects.all(),
+        source='recipe',
+        write_only=True
+    )
+    meal_type_display = serializers.CharField(source='get_meal_type_display', read_only=True)
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = MealPlan
+        fields = [
+            'id',
+            'user',
+            'recipe',
+            'recipe_id',
+            'recipe_title',
+            'date',
+            'meal_type',
+            'meal_type_display',
+            'notes',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        # Set user from request
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
 
 
 class RecipeSerializer(serializers.ModelSerializer):

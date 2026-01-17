@@ -412,3 +412,61 @@ class RecipeImage(models.Model):
                 is_primary=True
             ).exclude(pk=self.pk).update(is_primary=False)
         super().save(*args, **kwargs)
+
+
+class MealPlan(models.Model):
+    """
+    Meal Plan Model
+    
+    Allows users to plan meals on specific dates
+    """
+    MEAL_TYPE_CHOICES = [
+        ('breakfast', 'Breakfast'),
+        ('lunch', 'Lunch'),
+        ('dinner', 'Dinner'),
+        ('snack', 'Snack'),
+        ('dessert', 'Dessert'),
+    ]
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='meal_plans',
+        help_text="User who created this meal plan"
+    )
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='meal_plans',
+        help_text="Recipe planned for this meal"
+    )
+    date = models.DateField(
+        help_text="Date for this meal plan"
+    )
+    meal_type = models.CharField(
+        max_length=20,
+        choices=MEAL_TYPE_CHOICES,
+        default='dinner',
+        help_text="Type of meal (breakfast, lunch, dinner, snack, dessert)"
+    )
+    notes = models.TextField(
+        blank=True,
+        max_length=500,
+        help_text="Optional notes for this meal plan"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['date', 'meal_type']
+        verbose_name = "Meal Plan"
+        verbose_name_plural = "Meal Plans"
+        # Prevent duplicate meal plans for same user, date, and meal type
+        unique_together = ['user', 'date', 'meal_type']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['date', 'meal_type']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_meal_type_display()} on {self.date}"
