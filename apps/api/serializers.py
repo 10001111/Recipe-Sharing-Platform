@@ -7,6 +7,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.recipes.models import Recipe, Category, Ingredient, RecipeIngredient, Rating, Comment, Favorite, RecipeImage, MealPlan
 from apps.users.models import UserProfile
+from .models import APIKey
 
 User = get_user_model()
 
@@ -383,3 +384,42 @@ class RecipeListSerializer(serializers.ModelSerializer):
     
     def get_comment_count(self, obj):
         return obj.comments.count()
+
+
+class APIKeySerializer(serializers.ModelSerializer):
+    """Serializer for APIKey model"""
+    key = serializers.CharField(read_only=True)  # Never expose key in list views
+    key_preview = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = APIKey
+        fields = [
+            'id',
+            'name',
+            'key',  # Only shown when creating/retrieving single instance
+            'key_preview',  # Show masked key in list views
+            'is_active',
+            'is_valid',
+            'last_used',
+            'created_at',
+            'expires_at',
+        ]
+        read_only_fields = ['id', 'key', 'created_at', 'last_used']
+    
+    def get_key_preview(self, obj):
+        """Show masked version of API key for security"""
+        if obj.key:
+            # Show first 8 and last 4 characters
+            return f"{obj.key[:8]}...{obj.key[-4:]}"
+        return None
+    
+    def get_is_valid(self, obj):
+        """Check if API key is valid"""
+        return obj.is_valid()
+    
+    def create(self, validated_data):
+        """Create API key and generate key string"""
+        validated_data['user'] = self.context['request'].user
+        api_key = APIKey.objects.create(**validated_data)
+        return api_key

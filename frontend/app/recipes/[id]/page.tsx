@@ -12,6 +12,7 @@ import FavoriteButton from '@/components/FavoriteButton';
 import InstructionDisplay from '@/components/InstructionDisplay';
 import RecipeImage from '@/components/RecipeImage';
 import ImageGallery from '@/components/ImageGallery';
+import ExportToMealPlanner from '@/components/ExportToMealPlanner';
 import { getImageUrlOrPlaceholder } from '@/lib/placeholders';
 
 export default function RecipeDetailPage() {
@@ -404,6 +405,7 @@ export default function RecipeDetailPage() {
 
           {/* Action Buttons */}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <ExportToMealPlanner recipeId={recipeId} recipeTitle={recipe.title} />
             <FavoriteButton
               recipeId={recipeId}
               initialFavorited={isFavorited}

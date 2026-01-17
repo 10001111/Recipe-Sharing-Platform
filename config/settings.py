@@ -256,6 +256,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',  # For web frontend
         'rest_framework.authentication.TokenAuthentication',  # For API token auth
         'rest_framework_simplejwt.authentication.JWTAuthentication',  # For JWT auth
+        'apps.api.authentication.APIKeyAuthentication',  # API Key authentication for meal planner apps
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,

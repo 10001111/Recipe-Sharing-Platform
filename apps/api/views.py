@@ -7,13 +7,16 @@ from rest_framework.exceptions import ValidationError, NotFound
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from apps.recipes.models import Recipe, Rating, Comment, Favorite, MealPlan, Ingredient
 from apps.users.models import UserProfile
+from .models import APIKey
 from .serializers import (
     RecipeSerializer, RecipeListSerializer,
     RatingSerializer, CommentSerializer, FavoriteSerializer,
-    UserProfileSerializer, MealPlanSerializer, IngredientSerializer
+    UserProfileSerializer, MealPlanSerializer, IngredientSerializer,
+    APIKeySerializer
 )
 
 User = get_user_model()
@@ -79,6 +82,41 @@ def current_user(request):
     """
     from .serializers import UserSerializer
     serializer = UserSerializer(request.user)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_favorites(request):
+    """
+    Get current user's favorite recipes
+    
+    Returns a list of recipes that the current user has favorited.
+    Requires authentication.
+    """
+    from .serializers import RecipeListSerializer
+    from rest_framework.pagination import PageNumberPagination
+    
+    favorites = Favorite.objects.filter(user=request.user).select_related('recipe', 'recipe__author', 'recipe__category').prefetch_related(
+        'recipe__recipe_ingredients__ingredient',
+        'recipe__ratings',
+        'recipe__comments',
+        'recipe__favorites',
+        'recipe__images'
+    )
+    
+    recipes = [favorite.recipe for favorite in favorites]
+    
+    # Apply pagination
+    paginator = PageNumberPagination()
+    paginator.page_size = 20
+    page = paginator.paginate_queryset(recipes, request)
+    
+    if page is not None:
+        serializer = RecipeListSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)
+    
+    serializer = RecipeListSerializer(recipes, many=True, context={'request': request})
     return Response(serializer.data)
 
 
@@ -470,6 +508,398 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = self.get_object()
         recipe.increment_view_count()
         return Response({'view_count': recipe.view_count})
+    
+    @action(detail=False, methods=['get'], url_path='search', permission_classes=[AllowAny])
+    def search(self, request):
+        """
+        Search recipes with filters
+        
+        Query parameters:
+        - search: Text search in title, description, instructions
+        - category: Category ID
+        - author_username: Filter by author username
+        - ingredients: Comma-separated ingredient names
+        - max_prep_time: Maximum preparation time in minutes
+        - max_cook_time: Maximum cooking time in minutes
+        - max_total_time: Maximum total time in minutes
+        - dietary: Dietary restriction filter
+        - sort: Sort order (newest, oldest, rating, views, title)
+        - page: Page number for pagination
+        """
+        # Use the existing get_queryset logic
+        queryset = self.get_queryset()
+        
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='by-ingredients', permission_classes=[AllowAny])
+    def by_ingredients(self, request):
+        """
+        Search recipes by ingredients
+        
+        Query parameters:
+        - ingredients: Comma-separated list of ingredient names (required)
+        - match_all: If 'true', recipe must contain ALL ingredients; if 'false' (default), recipe must contain ANY ingredient
+        """
+        ingredients_query = request.query_params.get('ingredients', None)
+        match_all = request.query_params.get('match_all', 'false').lower() == 'true'
+        
+        if not ingredients_query:
+            return Response(
+                {'error': 'ingredients parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        ingredients_list = [i.strip() for i in ingredients_query.split(',') if i.strip()]
+        
+        if not ingredients_list:
+            return Response(
+                {'error': 'At least one ingredient is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Base queryset
+        if request.user.is_authenticated:
+            queryset = Recipe.objects.filter(
+                Q(is_published=True) | Q(author=request.user)
+            )
+        else:
+            queryset = Recipe.objects.filter(is_published=True)
+        
+        queryset = queryset.select_related('author', 'category').prefetch_related(
+            'recipe_ingredients__ingredient',
+            'ratings',
+            'comments',
+            'favorites',
+            'images'
+        )
+        
+        if match_all:
+            # Recipe must contain ALL specified ingredients
+            for ingredient_name in ingredients_list:
+                queryset = queryset.filter(ingredients__name__iexact=ingredient_name)
+            queryset = queryset.distinct()
+        else:
+            # Recipe must contain ANY of the specified ingredients
+            queryset = queryset.filter(ingredients__name__in=ingredients_list).distinct()
+        
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='export', permission_classes=[AllowAny])
+    def export(self, request):
+        """
+        Export recipes in multiple formats for meal planner apps
+        
+        Query parameters:
+        - format: Export format ('json', 'csv', 'recipeml', 'xml') - default: 'json'
+        - category: Filter by category ID
+        - author_username: Filter by author username
+        - search: Text search
+        - ingredients: Comma-separated ingredient names
+        """
+        import csv
+        import json
+        import xml.etree.ElementTree as ET
+        from django.http import HttpResponse
+        from io import StringIO
+        
+        format_type = request.query_params.get('format', 'json').lower()
+        
+        # Get filtered queryset
+        queryset = self.get_queryset()
+        
+        if format_type == 'csv':
+            # CSV Export
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="recipes.csv"'
+            
+            writer = csv.writer(response)
+            # Write header
+            writer.writerow([
+                'ID', 'Title', 'Description', 'Author', 'Category', 
+                'Prep Time (min)', 'Cook Time (min)', 'Total Time (min)',
+                'Dietary Restrictions', 'View Count', 'Average Rating', 
+                'Rating Count', 'Favorite Count', 'Comment Count',
+                'Created At', 'Updated At'
+            ])
+            
+            # Write data
+            for recipe in queryset:
+                writer.writerow([
+                    recipe.id,
+                    recipe.title,
+                    recipe.description[:200] if recipe.description else '',  # Truncate long descriptions
+                    recipe.author.username if recipe.author else '',
+                    recipe.category.name if recipe.category else '',
+                    recipe.prep_time,
+                    recipe.cook_time,
+                    recipe.total_time,
+                    recipe.get_dietary_restrictions_display() if recipe.dietary_restrictions else '',
+                    recipe.view_count,
+                    recipe.average_rating,
+                    recipe.rating_count,
+                    recipe.favorites.count(),
+                    recipe.comments.count(),
+                    recipe.created_at.isoformat() if recipe.created_at else '',
+                    recipe.updated_at.isoformat() if recipe.updated_at else '',
+                ])
+            
+            return response
+        
+        elif format_type in ['recipeml', 'xml']:
+            # RecipeML XML Export (standard format for meal planner apps)
+            root = ET.Element('recipeml', version='0.5')
+            recipe_collection = ET.SubElement(root, 'recipe')
+            
+            for recipe in queryset:
+                recipe_elem = ET.SubElement(recipe_collection, 'recipe')
+                
+                # Recipe metadata
+                head = ET.SubElement(recipe_elem, 'head')
+                title_elem = ET.SubElement(head, 'title')
+                title_elem.text = recipe.title
+                
+                if recipe.description:
+                    description_elem = ET.SubElement(head, 'description')
+                    description_elem.text = recipe.description
+                
+                # Categories
+                if recipe.category:
+                    categories = ET.SubElement(head, 'categories')
+                    cat = ET.SubElement(categories, 'cat')
+                    cat.text = recipe.category.name
+                
+                # Timing
+                if recipe.prep_time or recipe.cook_time:
+                    times = ET.SubElement(head, 'times')
+                    if recipe.prep_time:
+                        prep = ET.SubElement(times, 'prep')
+                        prep.text = f"PT{recipe.prep_time}M"  # ISO 8601 duration format
+                    if recipe.cook_time:
+                        cook = ET.SubElement(times, 'cook')
+                        cook.text = f"PT{recipe.cook_time}M"
+                    if recipe.total_time:
+                        total = ET.SubElement(times, 'total')
+                        total.text = f"PT{recipe.total_time}M"
+                
+                # Ingredients
+                ingredients = ET.SubElement(recipe_elem, 'ingredients')
+                ingredient_list = ET.SubElement(ingredients, 'ing')
+                
+                for ri in recipe.recipe_ingredients.all():
+                    item = ET.SubElement(ingredient_list, 'item')
+                    if ri.quantity:
+                        amt = ET.SubElement(item, 'amt')
+                        qty = ET.SubElement(amt, 'qty')
+                        qty.text = str(ri.quantity)
+                        if ri.unit:
+                            unit = ET.SubElement(amt, 'unit')
+                            unit.text = ri.unit
+                    if ri.ingredient:
+                        ing_name = ET.SubElement(item, 'item')
+                        ing_name.text = ri.ingredient.name
+                    if ri.notes:
+                        prep_note = ET.SubElement(item, 'prep')
+                        prep_note.text = ri.notes
+                
+                # Directions
+                directions = ET.SubElement(recipe_elem, 'directions')
+                step_list = ET.SubElement(directions, 'step')
+                
+                # Parse instructions (assuming JSON format)
+                try:
+                    if recipe.instructions:
+                        import json as json_lib
+                        instructions_data = json_lib.loads(recipe.instructions)
+                        if isinstance(instructions_data, list):
+                            for idx, step in enumerate(instructions_data, 1):
+                                step_elem = ET.SubElement(step_list, 'step')
+                                step_elem.set('number', str(idx))
+                                if isinstance(step, dict) and 'text' in step:
+                                    step_elem.text = step['text']
+                                elif isinstance(step, str):
+                                    step_elem.text = step
+                        else:
+                            # Fallback: treat as plain text
+                            step_elem = ET.SubElement(step_list, 'step')
+                            step_elem.text = recipe.instructions
+                except:
+                    # Fallback: treat as plain text
+                    step_elem = ET.SubElement(step_list, 'step')
+                    step_elem.text = recipe.instructions or ''
+            
+            # Convert to XML string
+            xml_str = ET.tostring(root, encoding='unicode', method='xml')
+            
+            response = HttpResponse(xml_str, content_type='application/xml')
+            response['Content-Disposition'] = 'attachment; filename="recipes.recipeml"'
+            return response
+        
+        else:  # JSON export (default)
+            serializer = self.get_serializer(queryset, many=True)
+            response = Response(serializer.data)
+            response['Content-Disposition'] = 'attachment; filename="recipes.json"'
+            response['Content-Type'] = 'application/json'
+            return response
+    
+    @action(detail=True, methods=['get'], url_path='export-meal-planner', permission_classes=[AllowAny])
+    def export_meal_planner(self, request, pk=None):
+        """
+        Export a single recipe in meal planner compatible format
+        
+        Query parameters:
+        - format: Export format ('json', 'recipeml', 'xml') - default: 'json'
+        - app: Target meal planner app ('paprika', 'mealime', 'anylist', 'generic')
+        """
+        recipe = self.get_object()
+        format_type = request.query_params.get('format', 'json').lower()
+        app_type = request.query_params.get('app', 'generic').lower()
+        
+        import json
+        import xml.etree.ElementTree as ET
+        from django.http import HttpResponse
+        
+        if format_type in ['recipeml', 'xml']:
+            # RecipeML format
+            root = ET.Element('recipeml', version='0.5')
+            recipe_elem = ET.SubElement(root, 'recipe')
+            
+            # Recipe metadata
+            head = ET.SubElement(recipe_elem, 'head')
+            title_elem = ET.SubElement(head, 'title')
+            title_elem.text = recipe.title
+            
+            if recipe.description:
+                description_elem = ET.SubElement(head, 'description')
+                description_elem.text = recipe.description
+            
+            # Categories
+            if recipe.category:
+                categories = ET.SubElement(head, 'categories')
+                cat = ET.SubElement(categories, 'cat')
+                cat.text = recipe.category.name
+            
+            # Timing
+            if recipe.prep_time or recipe.cook_time:
+                times = ET.SubElement(head, 'times')
+                if recipe.prep_time:
+                    prep = ET.SubElement(times, 'prep')
+                    prep.text = f"PT{recipe.prep_time}M"
+                if recipe.cook_time:
+                    cook = ET.SubElement(times, 'cook')
+                    cook.text = f"PT{recipe.cook_time}M"
+            
+            # Ingredients
+            ingredients = ET.SubElement(recipe_elem, 'ingredients')
+            ingredient_list = ET.SubElement(ingredients, 'ing')
+            
+            for ri in recipe.recipe_ingredients.all():
+                item = ET.SubElement(ingredient_list, 'item')
+                if ri.quantity:
+                    amt = ET.SubElement(item, 'amt')
+                    qty = ET.SubElement(amt, 'qty')
+                    qty.text = str(ri.quantity)
+                    if ri.unit:
+                        unit = ET.SubElement(amt, 'unit')
+                        unit.text = ri.unit
+                if ri.ingredient:
+                    ing_name = ET.SubElement(item, 'item')
+                    ing_name.text = ri.ingredient.name
+            
+            # Directions
+            directions = ET.SubElement(recipe_elem, 'directions')
+            step_list = ET.SubElement(directions, 'step')
+            
+            try:
+                if recipe.instructions:
+                    instructions_data = json.loads(recipe.instructions)
+                    if isinstance(instructions_data, list):
+                        for idx, step in enumerate(instructions_data, 1):
+                            step_elem = ET.SubElement(step_list, 'step')
+                            step_elem.set('number', str(idx))
+                            if isinstance(step, dict) and 'text' in step:
+                                step_elem.text = step['text']
+                            elif isinstance(step, str):
+                                step_elem.text = step
+            except:
+                step_elem = ET.SubElement(step_list, 'step')
+                step_elem.text = recipe.instructions or ''
+            
+            xml_str = ET.tostring(root, encoding='unicode', method='xml')
+            response = HttpResponse(xml_str, content_type='application/xml')
+            response['Content-Disposition'] = f'attachment; filename="{recipe.title.replace(" ", "_")}.recipeml"'
+            return response
+        
+        else:  # JSON format (with app-specific formatting)
+            serializer = RecipeSerializer(recipe, context={'request': request})
+            data = serializer.data
+            
+            # Format for specific apps if requested
+            if app_type == 'paprika':
+                # Paprika Recipe Manager format
+                data = {
+                    'name': recipe.title,
+                    'description': recipe.description,
+                    'prep_time': recipe.prep_time,
+                    'cook_time': recipe.cook_time,
+                    'servings': '',  # Not stored in our model
+                    'category': recipe.category.name if recipe.category else '',
+                    'ingredients': [
+                        f"{ri.quantity} {ri.unit} {ri.ingredient.name}".strip()
+                        for ri in recipe.recipe_ingredients.all()
+                    ],
+                    'directions': self._parse_instructions(recipe.instructions),
+                    'notes': '',
+                    'nutritional_info': '',
+                    'image_url': request.build_absolute_uri(recipe.image.url) if recipe.image else '',
+                }
+            elif app_type == 'mealime':
+                # Mealime format
+                data = {
+                    'title': recipe.title,
+                    'description': recipe.description,
+                    'prep_time_minutes': recipe.prep_time,
+                    'cook_time_minutes': recipe.cook_time,
+                    'ingredients': [
+                        {
+                            'name': ri.ingredient.name,
+                            'amount': ri.quantity,
+                            'unit': ri.unit,
+                        }
+                        for ri in recipe.recipe_ingredients.all()
+                    ],
+                    'instructions': self._parse_instructions(recipe.instructions),
+                }
+            
+            response = HttpResponse(json.dumps(data, indent=2), content_type='application/json')
+            response['Content-Disposition'] = f'attachment; filename="{recipe.title.replace(" ", "_")}.json"'
+            return response
+    
+    def _parse_instructions(self, instructions):
+        """Parse instructions JSON into list of strings"""
+        if not instructions:
+            return []
+        try:
+            import json
+            data = json.loads(instructions)
+            if isinstance(data, list):
+                return [step.get('text', step) if isinstance(step, dict) else str(step) for step in data]
+            return [instructions]
+        except:
+            return [instructions] if instructions else []
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
@@ -941,3 +1371,49 @@ class MealPlanViewSet(viewsets.ModelViewSet):
         response = HttpResponse(buffer.read(), content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="grocery-list.pdf"'
         return response
+
+
+class APIKeyViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing API keys for meal planner apps
+    
+    Allows users to create, list, update, and delete API keys
+    for integrating meal planner apps with the Recipe Sharing Platform.
+    """
+    serializer_class = APIKeySerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Return only API keys for the current user"""
+        return APIKey.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        """Set user when creating API key"""
+        serializer.save(user=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def regenerate(self, request, pk=None):
+        """Regenerate API key (creates new key, deactivates old one)"""
+        api_key = self.get_object()
+        api_key.is_active = False
+        api_key.save()
+        
+        # Create new API key with same name
+        new_key = APIKey.objects.create(
+            name=api_key.name,
+            user=request.user,
+            expires_at=api_key.expires_at
+        )
+        
+        serializer = self.get_serializer(new_key)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        """Toggle API key active status"""
+        api_key = self.get_object()
+        api_key.is_active = not api_key.is_active
+        api_key.save()
+        
+        serializer = self.get_serializer(api_key)
+        return Response(serializer.data)
