@@ -49,6 +49,9 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework',
+    'rest_framework.authtoken',  # Token authentication
+    'rest_framework_simplejwt',  # JWT authentication
+    'drf_spectacular',  # API documentation (OpenAPI/Swagger)
     'corsheaders',
     'django_extensions',
     
@@ -250,10 +253,74 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',  # Require authentication by default
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.SessionAuthentication',  # For web frontend
+        'rest_framework.authentication.TokenAuthentication',  # For API token auth
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # For JWT auth
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    # API Documentation (OpenAPI/Swagger)
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# JWT Authentication Settings
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
+
+# API Documentation Settings (drf-spectacular)
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Recipe Sharing Platform API',
+    'DESCRIPTION': 'REST API for Recipe Sharing Platform. Manage recipes, ingredients, ratings, comments, favorites, and meal plans.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
+    'TAGS': [
+        {'name': 'recipes', 'description': 'Recipe management endpoints'},
+        {'name': 'ingredients', 'description': 'Ingredient management endpoints'},
+        {'name': 'users', 'description': 'User and profile endpoints'},
+        {'name': 'ratings', 'description': 'Recipe rating endpoints'},
+        {'name': 'comments', 'description': 'Comment endpoints'},
+        {'name': 'favorites', 'description': 'Favorite recipe endpoints'},
+        {'name': 'meal-plans', 'description': 'Meal planning endpoints'},
+        {'name': 'authentication', 'description': 'Authentication endpoints'},
+    ],
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'displayOperationId': False,
+        'defaultModelsExpandDepth': 1,
+        'defaultModelExpandDepth': 1,
+        'docExpansion': 'list',
+        'filter': True,
+        'showExtensions': True,
+        'showCommonExtensions': True,
+    },
+    'REDOC_UI_SETTINGS': {
+        'hideDownloadButton': False,
+        'hideHostname': False,
+        'hideSingleRequestSample': False,
+        'expandResponses': '200,201',
+        'pathInMiddlePanel': True,
+        'requiredPropsFirst': True,
+        'sortOperationsAlphabetically': False,
+        'sortTagsAlphabetically': True,
+    },
 }
 
 # Security Settings for Production

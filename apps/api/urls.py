@@ -7,6 +7,7 @@ app_name = 'api'
 # Create a router and register viewsets
 router = DefaultRouter()
 router.register(r'recipes', views.RecipeViewSet, basename='recipe')
+router.register(r'ingredients', views.IngredientViewSet, basename='ingredient')
 router.register(r'ratings', views.RatingViewSet, basename='rating')
 router.register(r'comments', views.CommentViewSet, basename='comment')
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite')

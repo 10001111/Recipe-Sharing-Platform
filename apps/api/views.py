@@ -7,12 +7,13 @@ from rest_framework.exceptions import ValidationError, NotFound
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg
 from django.contrib.auth import get_user_model
-from apps.recipes.models import Recipe, Rating, Comment, Favorite, MealPlan
+from rest_framework.authtoken.models import Token
+from apps.recipes.models import Recipe, Rating, Comment, Favorite, MealPlan, Ingredient
 from apps.users.models import UserProfile
 from .serializers import (
     RecipeSerializer, RecipeListSerializer,
     RatingSerializer, CommentSerializer, FavoriteSerializer,
-    UserProfileSerializer, MealPlanSerializer
+    UserProfileSerializer, MealPlanSerializer, IngredientSerializer
 )
 
 User = get_user_model()
@@ -28,12 +29,24 @@ def api_root(request):
     return Response({
         'message': 'Welcome to Recipe Sharing Platform API',
         'version': '1.0.0',
+        'documentation': {
+            'swagger': request.build_absolute_uri('/api/docs/'),
+            'redoc': request.build_absolute_uri('/api/redoc/'),
+            'schema': request.build_absolute_uri('/api/schema/'),
+        },
         'endpoints': {
-            'recipes': '/api/recipes/',
-            'ratings': '/api/ratings/',
-            'comments': '/api/comments/',
-            'favorites': '/api/favorites/',
-            'health': '/api/health/',
+            'recipes': request.build_absolute_uri('/api/recipes/'),
+            'ratings': request.build_absolute_uri('/api/ratings/'),
+            'comments': request.build_absolute_uri('/api/comments/'),
+            'favorites': request.build_absolute_uri('/api/favorites/'),
+            'meal-plans': request.build_absolute_uri('/api/meal-plans/'),
+            'users': request.build_absolute_uri('/api/users/me/'),
+            'health': request.build_absolute_uri('/api/health/'),
+        },
+        'authentication': {
+            'token': request.build_absolute_uri('/api/auth/token/'),
+            'jwt': request.build_absolute_uri('/api/auth/token/'),
+            'session': 'Use Django session cookies',
         }
     })
 
@@ -43,16 +56,15 @@ def api_root(request):
 def supabase_config(request):
     """
     Get Supabase configuration for frontend
-    Returns Supabase URL and anon key (safe to expose publicly)
+    
+    Returns Supabase URL and anonymous key for client-side authentication.
+    This endpoint is public and safe to expose.
     """
     from django.conf import settings
-    supabase_url = getattr(settings, 'SUPABASE_URL', '')
-    supabase_anon_key = getattr(settings, 'SUPABASE_ANON_KEY', '')
     
     return Response({
-        'supabase_url': supabase_url,
-        'supabase_anon_key': supabase_anon_key,
-        'enabled': bool(supabase_url and supabase_anon_key)
+        'supabase_url': getattr(settings, 'SUPABASE_URL', ''),
+        'supabase_anon_key': getattr(settings, 'SUPABASE_ANON_KEY', ''),
     })
 
 
@@ -61,10 +73,68 @@ def supabase_config(request):
 def current_user(request):
     """
     Get current authenticated user information
+    
+    Returns the currently authenticated user's details.
+    Requires authentication via Session, Token, or JWT.
     """
     from .serializers import UserSerializer
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def obtain_token(request):
+    """
+    Obtain API token for authentication
+    
+    POST with username and password to get an API token.
+    Use this token in subsequent requests: Authorization: Token <token>
+    """
+    from django.contrib.auth import authenticate
+    from .serializers import UserSerializer
+    
+    username = request.data.get('username')
+    password = request.data.get('password')
+    
+    if not username or not password:
+        return Response(
+            {'error': 'Username and password are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    user = authenticate(username=username, password=password)
+    
+    if not user:
+        return Response(
+            {'error': 'Invalid credentials'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    # Get or create token
+    token, created = Token.objects.get_or_create(user=user)
+    user_serializer = UserSerializer(user)
+    
+    return Response({
+        'token': token.key,
+        'user': user_serializer.data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def revoke_token(request):
+    """
+    Revoke current user's API token
+    
+    Deletes the token, requiring re-authentication for token-based requests.
+    """
+    try:
+        token = Token.objects.get(user=request.user)
+        token.delete()
+        return Response({'message': 'Token revoked successfully'}, status=status.HTTP_200_OK)
+    except Token.DoesNotExist:
+        return Response({'message': 'No token found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['GET'])
@@ -72,119 +142,100 @@ def current_user(request):
 def user_profile(request, username):
     """
     Get user profile by username
+    
+    Returns public profile information for a user.
     """
+    from .serializers import UserProfileSerializer
+    
     try:
         user = User.objects.get(username=username)
-        profile, created = UserProfile.objects.get_or_create(user=user)
+        profile = UserProfile.objects.get(user=user)
         serializer = UserProfileSerializer(profile, context={'request': request})
-        
-        # Add recipe statistics
-        user_recipes = Recipe.objects.filter(author=user, is_published=True)
-        recipe_count = user_recipes.count()
-        
-        return Response({
-            **serializer.data,
-            'recipe_count': recipe_count,
-        })
+        return Response(serializer.data)
     except User.DoesNotExist:
-        raise NotFound("User not found")
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except UserProfile.DoesNotExist:
+        # Return basic user info if profile doesn't exist
+        from .serializers import UserSerializer
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
 
 
-@api_view(['PATCH', 'PUT'])
+@api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_user_profile(request, username):
     """
-    Update user profile (username and avatar)
-    Only the profile owner can update
+    Update user profile
+    
+    Allows users to update their own profile information.
     """
+    from .serializers import UserProfileSerializer
+    
+    if request.user.username != username:
+        return Response(
+            {'error': 'You can only update your own profile'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
     try:
-        user = User.objects.get(username=username)
-        
-        # Check if user is updating their own profile
-        if request.user != user:
-            return Response(
-                {'error': 'You can only update your own profile'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        profile, created = UserProfile.objects.get_or_create(user=user)
-        
-        # Update username if provided
-        if 'username' in request.data:
-            new_username = request.data['username']
-            if User.objects.filter(username=new_username).exclude(pk=user.pk).exists():
-                return Response(
-                    {'error': 'Username already taken'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            user.username = new_username
-            user.save()
-        
-        # Prepare data for profile update (exclude username as it's handled separately)
-        profile_data = {}
-        if 'bio' in request.data:
-            profile_data['bio'] = request.data['bio']
-        if 'avatar' in request.FILES:
-            profile_data['avatar'] = request.FILES['avatar']
-        if 'dietary_preferences' in request.data:
-            profile_data['dietary_preferences'] = request.data['dietary_preferences']
-        
-        # Update profile fields
-        serializer = UserProfileSerializer(profile, data=profile_data, partial=True, context={'request': request})
+        profile = UserProfile.objects.get(user=request.user)
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True, context={'request': request})
         
         if serializer.is_valid():
             serializer.save()
-            
-            # Return updated profile
-            updated_serializer = UserProfileSerializer(profile, context={'request': request})
-            user_recipes = Recipe.objects.filter(author=user, is_published=True)
-            recipe_count = user_recipes.count()
-            
-            return Response({
-                **updated_serializer.data,
-                'recipe_count': recipe_count,
-            })
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            
-    except User.DoesNotExist:
-        raise NotFound("User not found")
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except UserProfile.DoesNotExist:
+        # Create profile if it doesn't exist
+        profile = UserProfile.objects.create(user=request.user)
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True, context={'request': request})
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Public endpoint for monitoring
 def health_check(request):
     """
-    Health check endpoint.
-    Useful for monitoring and testing database connection.
+    Health check endpoint
+    
+    Returns API health status. Useful for monitoring and load balancers.
     """
     from django.db import connection
     
     try:
-        # Test database connection
+        # Check database connection
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
-            db_status = "connected"
+        
+        return Response({
+            'status': 'healthy',
+            'database': 'connected',
+            'timestamp': timezone.now().isoformat(),
+        }, status=status.HTTP_200_OK)
     except Exception as e:
-        db_status = f"error: {str(e)}"
-    
-    return Response({
-        'status': 'healthy',
-        'database': db_status,
-    }, status=status.HTTP_200_OK)
+        return Response({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e),
+            'timestamp': timezone.now().isoformat(),
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-
-# ========== RECIPE API VIEWS ==========
 
 class RecipeViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Recipe CRUD operations
     
-    list: Get all published recipes (authors can see their own unpublished)
-    retrieve: Get a single recipe with statistics (authors can see their own unpublished)
-    create: Create a new recipe (authenticated users only)
-    update: Update a recipe (author or staff only)
-    destroy: Delete a recipe (author or staff only)
+    - list: Get all published recipes (authors can see their own unpublished)
+    - retrieve: Get a single recipe with statistics (authors can see their own unpublished)
+    - create: Create a new recipe (authenticated users only)
+    - update: Update a recipe (author or staff only)
+    - destroy: Delete a recipe (author or staff only)
+    
+    Authentication: Session, Token, or JWT
     """
     queryset = Recipe.objects.all().select_related('author', 'category')
     permission_classes = [IsAuthenticated]
@@ -207,118 +258,121 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
     
     def get_queryset(self):
-        """Filter recipes based on query parameters"""
-        # Use prefetch_related to optimize statistics queries
-        # Allow authors to see their own unpublished recipes
+        """
+        Filter recipes based on user permissions and query parameters
+        
+        - Published recipes are visible to everyone
+        - Authors can see their own unpublished recipes
+        - Supports filtering by category, search, author, ingredients, time, dietary restrictions
+        - Supports sorting by newest, oldest, rating, views, title
+        """
+        from django.db.models import F
+        
+        # Base queryset
         if self.request.user.is_authenticated:
+            # Authenticated users can see published recipes + their own unpublished
             queryset = Recipe.objects.filter(
                 Q(is_published=True) | Q(author=self.request.user)
-            ).select_related('author', 'category').prefetch_related(
-                'ratings',
-                'comments',
-                'favorites',
-                'recipe_ingredients__ingredient',
-                'images'
             )
         else:
-            queryset = Recipe.objects.filter(is_published=True).select_related('author', 'category').prefetch_related(
-                'ratings',
-                'comments',
-                'favorites',
-                'recipe_ingredients__ingredient'
-            )
+            # Anonymous users can only see published recipes
+            queryset = Recipe.objects.filter(is_published=True)
         
+        queryset = queryset.select_related('author', 'category').prefetch_related(
+            'recipe_ingredients__ingredient',
+            'ratings',
+            'comments',
+            'favorites',
+            'images'
+        )
+
         # Filter by category
-        category_slug = self.request.query_params.get('category', None)
-        if category_slug:
-            queryset = queryset.filter(category__slug=category_slug)
-        
-        # Text search (recipe name, description)
-        search = self.request.query_params.get('search', None)
-        if search:
+        category_id = self.request.query_params.get('category', None)
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+
+        # Search by title or description
+        search_query = self.request.query_params.get('search', None)
+        if search_query:
             queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(description__icontains=search)
-            ).distinct()
-        
-        # Ingredient-based search (find recipes by available ingredients)
-        ingredients = self.request.query_params.get('ingredients', None)
-        if ingredients:
-            # Support comma-separated list of ingredients
-            ingredient_list = [ing.strip() for ing in ingredients.split(',') if ing.strip()]
-            if ingredient_list:
-                queryset = queryset.filter(
-                    ingredients__name__in=ingredient_list
-                ).distinct()
-        
-        # Filter by prep time (max_prep_time)
-        max_prep_time = self.request.query_params.get('max_prep_time', None)
-        if max_prep_time:
-            try:
-                queryset = queryset.filter(prep_time__lte=int(max_prep_time))
-            except (ValueError, TypeError):
-                pass
-        
-        # Filter by cook time (max_cook_time)
-        max_cook_time = self.request.query_params.get('max_cook_time', None)
-        if max_cook_time:
-            try:
-                queryset = queryset.filter(cook_time__lte=int(max_cook_time))
-            except (ValueError, TypeError):
-                pass
-        
-        # Filter by total time (max_total_time)
-        max_total_time = self.request.query_params.get('max_total_time', None)
-        if max_total_time:
-            try:
-                max_time = int(max_total_time)
-                queryset = queryset.filter(
-                    Q(prep_time__lte=max_time) & Q(cook_time__lte=max_time)
-                )
-            except (ValueError, TypeError):
-                pass
-        
-        # Filter by dietary restrictions
-        dietary = self.request.query_params.get('dietary', None)
-        if dietary and dietary != 'all':
-            queryset = queryset.filter(dietary_restrictions=dietary)
-        
-        # Filter by author (ID or username)
-        author_id = self.request.query_params.get('author', None)
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(instructions__icontains=search_query)
+            )
+
+        # Filter by author username
         author_username = self.request.query_params.get('author_username', None)
-        
         if author_username:
             queryset = queryset.filter(author__username=author_username)
-        if author_id:
-            queryset = queryset.filter(author_id=author_id)
-        
-        # Sort options
-        sort_by = self.request.query_params.get('sort', 'newest')
+
+        # Filter by ingredients
+        ingredients_query = self.request.query_params.get('ingredients', None)
+        if ingredients_query:
+            ingredients_list = [i.strip() for i in ingredients_query.split(',') if i.strip()]
+            if ingredients_list:
+                queryset = queryset.filter(ingredients__name__in=ingredients_list).distinct()
+
+        # Filter by prep/cook/total time
+        max_prep_time = self.request.query_params.get('max_prep_time', None)
+        if max_prep_time and max_prep_time.isdigit():
+            queryset = queryset.filter(prep_time__lte=int(max_prep_time))
+
+        max_cook_time = self.request.query_params.get('max_cook_time', None)
+        if max_cook_time and max_cook_time.isdigit():
+            queryset = queryset.filter(cook_time__lte=int(max_cook_time))
+
+        max_total_time = self.request.query_params.get('max_total_time', None)
+        if max_total_time and max_total_time.isdigit():
+            queryset = queryset.annotate(total_time_calc=F('prep_time') + F('cook_time')).filter(total_time_calc__lte=int(max_total_time))
+
+        # Filter by dietary restrictions
+        dietary_filter = self.request.query_params.get('dietary', None)
+        if dietary_filter and dietary_filter != 'all':
+            queryset = queryset.filter(dietary_restrictions=dietary_filter)
+
+        # Sorting
+        sort_by = self.request.query_params.get('sort', '-created_at')
         if sort_by == 'newest':
             queryset = queryset.order_by('-created_at')
         elif sort_by == 'oldest':
             queryset = queryset.order_by('created_at')
         elif sort_by == 'rating':
-            queryset = queryset.annotate(
-                avg_rating=Avg('ratings__stars')
-            ).order_by('-avg_rating', '-created_at')
+            queryset = queryset.annotate(avg_rating=Avg('ratings__stars')).order_by('-avg_rating', '-created_at')
         elif sort_by == 'views':
             queryset = queryset.order_by('-view_count', '-created_at')
         elif sort_by == 'title':
             queryset = queryset.order_by('title')
         else:
             queryset = queryset.order_by('-created_at')
-        
+
         return queryset
-    
-    def create(self, request, *args, **kwargs):
-        """Handle recipe creation with ingredients and images"""
-        import json
+
+    def retrieve(self, request, *args, **kwargs):
+        """Get a single recipe with statistics"""
+        instance = self.get_object()
         
-        # Parse ingredients_data from FormData if it's a string
+        # Increment view count
+        if request.user.is_authenticated and request.user != instance.author:
+            instance.increment_view_count()
+        
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        """Set author to current user when creating recipe"""
+        serializer.save(author=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new recipe
+        
+        Handles FormData with nested ingredients_data and images_data.
+        """
+        # Handle ingredients_data from FormData
         if 'ingredients_data' in request.data:
             ingredients_data = request.data['ingredients_data']
             if isinstance(ingredients_data, str):
+                import json
                 try:
                     request.data._mutable = True
                     request.data['ingredients_data'] = json.loads(ingredients_data)
@@ -328,15 +382,15 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     request.data['ingredients_data'] = []
                     request.data._mutable = False
         else:
-            # If ingredients_data is not provided, default to empty list
             request.data._mutable = True
             request.data['ingredients_data'] = []
             request.data._mutable = False
         
-        # Parse images_data from FormData if it's a string
+        # Handle images_data from FormData
         if 'images_data' in request.data:
             images_data = request.data['images_data']
             if isinstance(images_data, str):
+                import json
                 try:
                     request.data._mutable = True
                     request.data['images_data'] = json.loads(images_data)
@@ -346,21 +400,23 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     request.data['images_data'] = []
                     request.data._mutable = False
         else:
-            # If images_data is not provided, default to empty list
             request.data._mutable = True
             request.data['images_data'] = []
             request.data._mutable = False
         
         return super().create(request, *args, **kwargs)
-    
+
     def update(self, request, *args, **kwargs):
-        """Handle recipe update with ingredients and images"""
-        import json
+        """
+        Update a recipe
         
-        # Parse ingredients_data from FormData if it's a string
+        Handles FormData with nested ingredients_data and images_data.
+        """
+        # Handle ingredients_data from FormData
         if 'ingredients_data' in request.data:
             ingredients_data = request.data['ingredients_data']
             if isinstance(ingredients_data, str):
+                import json
                 try:
                     request.data._mutable = True
                     request.data['ingredients_data'] = json.loads(ingredients_data)
@@ -369,12 +425,12 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     request.data._mutable = True
                     request.data['ingredients_data'] = []
                     request.data._mutable = False
-        # Note: If ingredients_data is not provided in update, we don't modify existing ingredients
         
-        # Parse images_data from FormData if it's a string
+        # Handle images_data from FormData
         if 'images_data' in request.data:
             images_data = request.data['images_data']
             if isinstance(images_data, str):
+                import json
                 try:
                     request.data._mutable = True
                     request.data['images_data'] = json.loads(images_data)
@@ -383,65 +439,76 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     request.data._mutable = True
                     request.data['images_data'] = []
                     request.data._mutable = False
-        # Note: If images_data is not provided in update, we don't modify existing images
         
         return super().update(request, *args, **kwargs)
-    
-    def perform_create(self, serializer):
-        """Set the author to the current user"""
-        serializer.save(author=self.request.user)
-    
-    def retrieve(self, request, *args, **kwargs):
-        """Retrieve a recipe - allow authors to see their own unpublished recipes"""
-        instance = self.get_object()
+
+    def get_object(self):
+        """Get recipe object, allowing authors to see unpublished recipes"""
+        obj = super().get_object()
         
-        # Check if recipe is published or user is the author
-        if not instance.is_published and instance.author != request.user and not request.user.is_staff:
-            raise NotFound("Recipe not found.")
+        # Check if user can view this recipe
+        if not obj.is_published and obj.author != self.request.user:
+            if not self.request.user.is_staff:
+                raise NotFound("Recipe not found or not published")
         
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
-    
-    def perform_update(self, serializer):
-        """Check permissions before updating"""
-        recipe = self.get_object()
-        if recipe.author != self.request.user and not self.request.user.is_staff:
-            raise ValidationError("You do not have permission to edit this recipe.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        """Check permissions before deleting"""
-        if instance.author != self.request.user and not self.request.user.is_staff:
-            raise ValidationError("You do not have permission to delete this recipe.")
-        instance.delete()
-    
+        return obj
+
+    def check_permissions(self, request):
+        """Check if user has permission for this action"""
+        if self.action in ['update', 'partial_update', 'destroy']:
+            obj = self.get_object()
+            if obj.author != request.user and not request.user.is_staff:
+                self.permission_denied(
+                    request,
+                    message="You can only modify your own recipes."
+                )
+        super().check_permissions(request)
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def increment_view(self, request, pk=None):
         """Increment view count for a recipe"""
         recipe = self.get_object()
         recipe.increment_view_count()
-        return Response({
-            'view_count': recipe.view_count
-        }, status=status.HTTP_200_OK)
+        return Response({'view_count': recipe.view_count})
 
 
-# ========== RATING API VIEWS ==========
+class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for Ingredient read operations
+    
+    - list: Get all ingredients
+    - retrieve: Get a single ingredient
+    
+    Read-only endpoint for browsing available ingredients.
+    """
+    queryset = Ingredient.objects.all().order_by('name')
+    serializer_class = IngredientSerializer
+    permission_classes = [AllowAny]  # Public read access
+    
+    def get_queryset(self):
+        """Filter ingredients by search query"""
+        queryset = super().get_queryset()
+        search_query = self.request.query_params.get('search', None)
+        if search_query:
+            queryset = queryset.filter(name__icontains=search_query)
+        return queryset
+
 
 class RatingViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Rating operations
     
-    list: Get all ratings for a recipe
-    create: Create or update a rating for a recipe
-    retrieve: Get a specific rating
-    update: Update a rating (owner only)
-    destroy: Delete a rating (owner only)
+    - list: Get ratings (filter by recipe or user)
+    - create: Create a new rating
+    - update: Update a rating
+    - destroy: Delete a rating
+    
+    Authentication: Session, Token, or JWT
     """
     serializer_class = RatingSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        """Filter ratings by recipe or user if provided"""
         queryset = Rating.objects.select_related('user', 'recipe')
         recipe_id = self.request.query_params.get('recipe', None)
         user_id = self.request.query_params.get('user', None)
@@ -451,177 +518,149 @@ class RatingViewSet(viewsets.ModelViewSet):
         elif user_id:
             queryset = queryset.filter(user_id=user_id)
         elif self.request.user.is_authenticated and self.request.query_params.get('mine') == 'true':
-            # Get current user's ratings
             queryset = queryset.filter(user=self.request.user)
-        
         return queryset.order_by('-created_at')
-    
+
     def perform_create(self, serializer):
-        """Create or update rating for current user"""
-        recipe_id = self.request.data.get('recipe')
-        recipe = get_object_or_404(Recipe, pk=recipe_id, is_published=True)
-        
-        # Get or create rating
-        rating, created = Rating.objects.get_or_create(
-            recipe=recipe,
-            user=self.request.user,
-            defaults={'stars': serializer.validated_data['stars']}
-        )
-        
-        if not created:
-            # Update existing rating
-            rating.stars = serializer.validated_data['stars']
-            rating.review_text = serializer.validated_data.get('review_text', rating.review_text)
-            rating.save()
-    
-    def perform_update(self, serializer):
-        """Check permissions before updating"""
-        rating = self.get_object()
-        if rating.user != self.request.user:
-            raise ValidationError("You can only update your own ratings.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        """Check permissions before deleting"""
-        if instance.user != self.request.user:
-            raise ValidationError("You can only delete your own ratings.")
-        instance.delete()
+        """Set user to current user when creating rating"""
+        serializer.save(user=self.request.user)
 
+    def get_permissions(self):
+        """Allow public read access, require auth for write operations"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
-# ========== COMMENT API VIEWS ==========
+    def check_permissions(self, request):
+        """Check if user has permission for this action"""
+        if self.action in ['update', 'partial_update', 'destroy']:
+            obj = self.get_object()
+            if obj.user != request.user and not request.user.is_staff:
+                self.permission_denied(
+                    request,
+                    message="You can only modify your own ratings."
+                )
+        super().check_permissions(request)
+
 
 class CommentViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Comment operations
     
-    list: Get all comments for a recipe
-    create: Create a comment on a recipe
-    retrieve: Get a specific comment
-    update: Update a comment (owner only)
-    destroy: Delete a comment (owner or staff only)
+    - list: Get comments (filter by recipe or user)
+    - create: Create a new comment
+    - update: Update a comment
+    - destroy: Delete a comment
+    
+    Authentication: Session, Token, or JWT
     """
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        """Filter comments by recipe or user if provided"""
         queryset = Comment.objects.select_related('user', 'recipe')
         recipe_id = self.request.query_params.get('recipe', None)
         user_id = self.request.query_params.get('user', None)
-        mine = self.request.query_params.get('mine', None)
         
         if recipe_id:
             queryset = queryset.filter(recipe_id=recipe_id)
         elif user_id:
             queryset = queryset.filter(user_id=user_id)
-        elif mine == 'true' and self.request.user.is_authenticated:
-            # Get current user's comments
+        elif self.request.user.is_authenticated and self.request.query_params.get('mine') == 'true':
             queryset = queryset.filter(user=self.request.user)
-        
         return queryset.order_by('-created_at')
-    
+
     def perform_create(self, serializer):
-        """Create comment for current user"""
-        recipe_id = self.request.data.get('recipe')
-        recipe = get_object_or_404(Recipe, pk=recipe_id, is_published=True)
-        serializer.save(user=self.request.user, recipe=recipe)
-    
-    def perform_update(self, serializer):
-        """Check permissions before updating"""
-        comment = self.get_object()
-        if comment.user != self.request.user:
-            raise ValidationError("You can only update your own comments.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        """Check permissions before deleting"""
-        if instance.user != self.request.user and not self.request.user.is_staff:
-            raise ValidationError("You do not have permission to delete this comment.")
-        instance.delete()
+        """Set user to current user when creating comment"""
+        serializer.save(user=self.request.user)
 
+    def get_permissions(self):
+        """Allow public read access, require auth for write operations"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
-# ========== FAVORITE API VIEWS ==========
+    def check_permissions(self, request):
+        """Check if user has permission for this action"""
+        if self.action in ['update', 'partial_update', 'destroy']:
+            obj = self.get_object()
+            if obj.user != request.user and not request.user.is_staff:
+                self.permission_denied(
+                    request,
+                    message="You can only modify your own comments."
+                )
+        super().check_permissions(request)
+
 
 class FavoriteViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Favorite operations
     
-    list: Get all favorites (user's favorites if no recipe filter)
-    create: Add a recipe to favorites
-    destroy: Remove a recipe from favorites
+    - list: Get user's favorites
+    - create: Toggle favorite (create if not exists, delete if exists)
+    - destroy: Remove favorite
+    
+    Authentication: Session, Token, or JWT
     """
     serializer_class = FavoriteSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        """Filter favorites by user or recipe"""
-        queryset = Favorite.objects.select_related('user', 'recipe')
-        
-        # If recipe parameter provided, get favorites for that recipe
-        recipe_id = self.request.query_params.get('recipe', None)
-        if recipe_id:
-            queryset = queryset.filter(recipe_id=recipe_id)
-        else:
-            # Otherwise, get current user's favorites
-            queryset = queryset.filter(user=self.request.user)
-        
-        return queryset.order_by('-created_at')
-    
-    def perform_create(self, serializer):
-        """Create favorite for current user"""
-        recipe_id = self.request.data.get('recipe')
-        recipe = get_object_or_404(Recipe, pk=recipe_id, is_published=True)
-        
-        # Check if already favorited
-        favorite, created = Favorite.objects.get_or_create(
-            recipe=recipe,
-            user=self.request.user
-        )
-        
-        if not created:
-            raise ValidationError("Recipe is already in your favorites.")
-        
-        serializer.instance = favorite
-    
-    def perform_destroy(self, instance):
-        """Check permissions before deleting"""
-        if instance.user != self.request.user:
-            raise ValidationError("You can only remove your own favorites.")
-        instance.delete()
-    
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
-    def toggle(self, request):
-        """Toggle favorite status for a recipe"""
+        """Get current user's favorites"""
+        return Favorite.objects.filter(user=self.request.user).select_related('recipe', 'user')
+
+    def create(self, request, *args, **kwargs):
+        """Toggle favorite - create if not exists, delete if exists"""
         recipe_id = request.data.get('recipe')
+        
         if not recipe_id:
             return Response(
-                {'error': 'Recipe ID is required.'},
+                {'error': 'Recipe ID is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        recipe = get_object_or_404(Recipe, pk=recipe_id, is_published=True)
+        try:
+            recipe = Recipe.objects.get(pk=recipe_id)
+        except Recipe.DoesNotExist:
+            return Response(
+                {'error': 'Recipe not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         favorite, created = Favorite.objects.get_or_create(
-            recipe=recipe,
-            user=request.user
+            user=request.user,
+            recipe=recipe
         )
         
         if not created:
+            # Already exists, delete it (toggle off)
             favorite.delete()
             is_favorited = False
         else:
             is_favorited = True
         
+        # Get updated favorite count
+        favorite_count = Favorite.objects.filter(recipe=recipe).count()
+        
         return Response({
             'is_favorited': is_favorited,
-            'favorite_count': recipe.favorites.count()
-        }, status=status.HTTP_200_OK)
+            'favorite_count': favorite_count
+        }, status=status.HTTP_200_OK if created else status.HTTP_200_OK)
 
 
 class MealPlanViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for MealPlan model
-    Allows users to plan meals on specific dates
+    ViewSet for MealPlan operations
+    
+    - list: Get all meal plans for the current user, with optional date range filtering
+    - create: Add a recipe to the meal plan
+    - retrieve: Get a specific meal plan entry
+    - update: Update a meal plan entry
+    - destroy: Remove a meal plan entry
+    - grocery-list: Generate grocery list from meal plans
+    - export_ical: Export meal plans as an iCal file
+    
+    Authentication: Session, Token, or JWT
     """
     serializer_class = MealPlanSerializer
     permission_classes = [IsAuthenticated]
@@ -635,9 +674,20 @@ class MealPlanViewSet(viewsets.ModelViewSet):
         end_date = self.request.query_params.get('end_date', None)
         
         if start_date:
-            queryset = queryset.filter(date__gte=start_date)
+            try:
+                from datetime import datetime
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__gte=start_date)
+            except ValueError:
+                pass
+        
         if end_date:
-            queryset = queryset.filter(date__lte=end_date)
+            try:
+                from datetime import datetime
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__lte=end_date)
+            except ValueError:
+                pass
         
         # Filter by meal type if provided
         meal_type = self.request.query_params.get('meal_type', None)
