@@ -690,3 +690,204 @@ class MealPlanViewSet(viewsets.ModelViewSet):
         response = HttpResponse('\r\n'.join(ical_content), content_type='text/calendar')
         response['Content-Disposition'] = 'attachment; filename="meal-plans.ics"'
         return response
+    
+    @action(detail=False, methods=['get'], url_path='grocery-list')
+    def grocery_list(self, request):
+        """
+        Generate grocery list from meal plans
+        
+        Query parameters:
+        - start_date: Start date (YYYY-MM-DD)
+        - end_date: End date (YYYY-MM-DD)
+        - format: Response format (json, text, pdf) - default: json
+        """
+        from .grocery_list import generate_grocery_list
+        from datetime import datetime
+        
+        queryset = self.get_queryset()
+        
+        # Get date range from query params
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        format_type = request.query_params.get('format', 'json').lower()
+        
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__gte=start_date)
+            except ValueError:
+                pass
+        
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__lte=end_date)
+            except ValueError:
+                pass
+        
+        meal_plans = list(queryset)
+        
+        if not meal_plans:
+            return Response({
+                'error': 'No meal plans found for the specified date range',
+                'ingredients_by_category': {},
+                'total_items': 0,
+                'date_range': {
+                    'start': start_date_str,
+                    'end': end_date_str,
+                },
+                'meal_plans_count': 0,
+            }, status=status.HTTP_200_OK)
+        
+        # Generate grocery list
+        grocery_data = generate_grocery_list(meal_plans)
+        
+        # Return in requested format
+        if format_type == 'text':
+            return self._grocery_list_text(grocery_data)
+        elif format_type == 'pdf':
+            return self._grocery_list_pdf(grocery_data)
+        else:  # json (default)
+            return Response(grocery_data, status=status.HTTP_200_OK)
+    
+    def _grocery_list_text(self, grocery_data):
+        """Generate plain text grocery list"""
+        from django.http import HttpResponse
+        
+        lines = []
+        lines.append("=" * 60)
+        lines.append("GROCERY LIST")
+        lines.append("=" * 60)
+        lines.append("")
+        
+        if grocery_data['date_range']['start']:
+            lines.append(f"Date Range: {grocery_data['date_range']['start']} to {grocery_data['date_range']['end']}")
+            lines.append("")
+        
+        lines.append(f"Total Items: {grocery_data['total_items']}")
+        lines.append(f"Meal Plans: {grocery_data['meal_plans_count']}")
+        lines.append("")
+        lines.append("=" * 60)
+        lines.append("")
+        
+        for category, items in grocery_data['ingredients_by_category'].items():
+            if not items:
+                continue
+            
+            lines.append(f"\n{category.upper()}")
+            lines.append("-" * 60)
+            
+            for item in items:
+                quantity_str = f"{item['total_quantity']:.2f}".rstrip('0').rstrip('.')
+                unit_str = f" {item['unit']}" if item['unit'] else ""
+                name_str = item['name']
+                
+                line = f"  • {quantity_str}{unit_str} {name_str}"
+                
+                if item['notes']:
+                    notes_str = ", ".join(item['notes'])
+                    line += f" ({notes_str})"
+                
+                lines.append(line)
+            
+            lines.append("")
+        
+        text_content = "\n".join(lines)
+        
+        response = HttpResponse(text_content, content_type='text/plain')
+        response['Content-Disposition'] = 'attachment; filename="grocery-list.txt"'
+        return response
+    
+    def _grocery_list_pdf(self, grocery_data):
+        """Generate PDF grocery list"""
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.units import inch
+            from io import BytesIO
+            from django.http import HttpResponse
+        except ImportError:
+            return Response({
+                'error': 'PDF generation requires reportlab library. Install with: pip install reportlab'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#333333'),
+            spaceAfter=12,
+            alignment=1,  # Center
+        )
+        category_style = ParagraphStyle(
+            'CategoryStyle',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=6,
+            spaceBefore=12,
+        )
+        
+        story = []
+        
+        # Title
+        story.append(Paragraph("GROCERY LIST", title_style))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Date range and summary
+        if grocery_data['date_range']['start']:
+            date_text = f"Date Range: {grocery_data['date_range']['start']} to {grocery_data['date_range']['end']}"
+            story.append(Paragraph(date_text, styles['Normal']))
+            story.append(Spacer(1, 0.1*inch))
+        
+        summary_text = f"Total Items: {grocery_data['total_items']} | Meal Plans: {grocery_data['meal_plans_count']}"
+        story.append(Paragraph(summary_text, styles['Normal']))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Ingredients by category
+        for category, items in grocery_data['ingredients_by_category'].items():
+            if not items:
+                continue
+            
+            story.append(Paragraph(category.upper(), category_style))
+            
+            # Create table for items
+            table_data = [['Quantity', 'Ingredient', 'Notes']]
+            
+            for item in items:
+                quantity_str = f"{item['total_quantity']:.2f}".rstrip('0').rstrip('.')
+                unit_str = f" {item['unit']}" if item['unit'] else ""
+                quantity = f"{quantity_str}{unit_str}"
+                name = item['name']
+                notes = ", ".join(item['notes']) if item['notes'] else ""
+                
+                table_data.append([quantity, name, notes])
+            
+            table = Table(table_data, colWidths=[1.5*inch, 3.5*inch, 2*inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ]))
+            
+            story.append(table)
+            story.append(Spacer(1, 0.2*inch))
+        
+        doc.build(story)
+        
+        buffer.seek(0)
+        response = HttpResponse(buffer.read(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="grocery-list.pdf"'
+        return response

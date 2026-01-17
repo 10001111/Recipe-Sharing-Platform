@@ -1,0 +1,90 @@
+/* Grocery List Styles */
+
+.grocery-list-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.grocery-list-content {
+  margin-top: 2rem;
+}
+
+.grocery-list-content h2 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.grocery-item {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s;
+}
+
+.grocery-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.grocery-item-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.grocery-item-quantity {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.grocery-item-notes {
+  font-size: 0.85rem;
+  color: #999;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+.grocery-item-recipes {
+  font-size: 0.8rem;
+  color: #999;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* Print Styles */
+@media print {
+  .grocery-list-container {
+    padding: 0;
+  }
+  
+  .grocery-list-container button {
+    display: none !important;
+  }
+  
+  .grocery-list-content {
+    page-break-inside: avoid;
+  }
+  
+  .grocery-list-content > div {
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+  
+  .grocery-item {
+    page-break-inside: avoid;
+    border: 1px solid #000;
+    margin-bottom: 0.5rem;
+  }
+  
+  body {
+    background: white;
+  }
+}
+

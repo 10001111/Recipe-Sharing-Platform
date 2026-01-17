@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { mealPlanApi, recipeApi, RecipeList } from '@/lib/api';
 import MealPlanCalendar from '@/components/MealPlanCalendar';
 import RecipeCard from '@/components/RecipeCard';
+import GroceryList from '@/components/GroceryList';
 
 export default function MealPlanPage() {
   const router = useRouter();
@@ -12,6 +13,8 @@ export default function MealPlanPage() {
   const [recipes, setRecipes] = useState<RecipeList[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRecipeList, setShowRecipeList] = useState(true);
+  const [showGroceryList, setShowGroceryList] = useState(false);
+  const [groceryListDateRange, setGroceryListDateRange] = useState<{ start?: string; end?: string }>({});
 
   useEffect(() => {
     checkAuth();
@@ -108,7 +111,7 @@ export default function MealPlanPage() {
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>
           Meal Planning Calendar
         </h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => setShowRecipeList(!showRecipeList)}
             className="btn-outline"
@@ -116,8 +119,23 @@ export default function MealPlanPage() {
             {showRecipeList ? 'Hide' : 'Show'} Recipe List
           </button>
           <button
-            onClick={handleExportICal}
+            onClick={() => {
+              const today = new Date();
+              const nextWeek = new Date(today);
+              nextWeek.setDate(nextWeek.getDate() + 7);
+              setGroceryListDateRange({
+                start: today.toISOString().split('T')[0],
+                end: nextWeek.toISOString().split('T')[0],
+              });
+              setShowGroceryList(true);
+            }}
             className="btn-primary"
+          >
+            🛒 Generate Grocery List
+          </button>
+          <button
+            onClick={handleExportICal}
+            className="btn-outline"
           >
             📅 Export iCal
           </button>
@@ -196,9 +214,19 @@ export default function MealPlanPage() {
           </div>
         )}
 
-        {/* Calendar */}
+        {/* Calendar or Grocery List */}
         <div>
-          <MealPlanCalendar onMealPlanChange={loadRecipes} />
+          {showGroceryList ? (
+            <GroceryList
+              startDate={groceryListDateRange.start}
+              endDate={groceryListDateRange.end}
+              onClose={() => setShowGroceryList(false)}
+            />
+          ) : (
+            <MealPlanCalendar 
+              onMealPlanChange={loadRecipes}
+            />
+          )}
         </div>
       </div>
     </main>

@@ -32,3 +32,6 @@ requests>=2.31.0  # For Supabase API calls
 PyJWT>=2.8.0  # For JWT token verification
 supabase>=2.0.0  # Official Supabase Python client
 
+# PDF Generation
+reportlab>=4.0.0  # For PDF grocery list export
+
