@@ -68,8 +68,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.api.middleware_rls.RLSAuthMiddleware',  # RLS support (PostgreSQL only)
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Custom security middleware
+    'apps.api.middleware.SecurityHeadersMiddleware',  # Add security headers
+    'apps.api.middleware.RateLimitMiddleware',  # Rate limiting for API
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -262,6 +266,15 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     # API Documentation (OpenAPI/Swagger)
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Rate Limiting (additional to middleware)
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',  # For anonymous users
+        'rest_framework.throttling.UserRateThrottle',  # For authenticated users
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '50/hour',  # Anonymous users: 50 requests per hour
+        'user': '200/hour',  # Authenticated users: 200 requests per hour
+    },
 }
 
 # JWT Authentication Settings
@@ -332,3 +345,41 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+
+# Content Security Policy (CSP) - Enhanced XSS Protection
+# CSP tells browsers what resources are allowed to load
+SECURE_CONTENT_SECURITY_POLICY = {
+    'default-src': ["'self'"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],  # Allow inline scripts for React
+    'style-src': ["'self'", "'unsafe-inline'"],  # Allow inline styles
+    'img-src': ["'self'", 'data:', 'https:', 'blob:'],  # Allow images from various sources
+    'font-src': ["'self'", 'data:'],
+    'connect-src': ["'self'", 'https://blob.vercel-storage.com', 'https://*.public.blob.vercel-storage.com'],
+    'frame-ancestors': ["'none'"],  # Prevent clickjacking
+    'base-uri': ["'self'"],
+    'form-action': ["'self'"],
+}
+
+# CSRF Settings (Enhanced)
+CSRF_COOKIE_HTTPONLY = True  # Prevent JavaScript from accessing CSRF cookie
+CSRF_COOKIE_SAMESITE = 'Lax'  # CSRF cookie same-site policy
+CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens (default)
+
+# Session Security
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript from accessing session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'  # Session cookie same-site policy
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+
+# Additional Security Headers
+SECURE_HSTS_SECONDS = 31536000  # 1 year (only in production)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# File Upload Security
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB (matches frontend validation)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # Limit number of form fields
+
+# Rate Limiting Configuration
+RATE_LIMIT_REQUESTS = config('RATE_LIMIT_REQUESTS', default=100, cast=int)  # Requests per window
+RATE_LIMIT_WINDOW = config('RATE_LIMIT_WINDOW', default=3600, cast=int)  # Window in seconds (1 hour)
